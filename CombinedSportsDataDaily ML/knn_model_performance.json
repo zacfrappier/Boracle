@@ -1,0 +1,14 @@
+{"config": 
+    {"view": {"continuousWidth": 300, "continuousHeight": 300}}, 
+        "data": {"name": "data-c04f63afc63bb66e3fd30c13a669fdca"}, 
+        "mark": {"type": "bar"}, 
+        "encoding": {"tooltip": [{"field": "Metric", "type": "nominal"}, 
+        {"field": "Score", "format": ".4f", "type": "quantitative"}], 
+        "x": {"axis": {"title": "Metric"}, 
+        "field": "Metric", 
+        "type": "nominal"}, 
+        "y": {"axis": {"format": ".2f", "title": "Score"}, 
+        "field": "Score", "scale": {"domain": [0, 1]}, 
+        "type": "quantitative"}}, 
+        "title": "KNN Model Performance: Accuracy and F1-score", 
+        "$schema": "https://vega.github.io/schema/vega-lite/v5.20.1.json", "datasets": {"data-c04f63afc63bb66e3fd30c13a669fdca": [{"Metric": "Accuracy", "Score": 0.9859714753331774}, {"Metric": "F1-score", "Score": 0.0}]}}
