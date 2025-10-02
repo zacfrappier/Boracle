@@ -60,6 +60,39 @@ df = pd.read_csv('timeseries (daily).csv')
 # Convert the 'Date" column to a datetime object
 df['Date'] = pd.to_datetime(df['Date'])
 
+#features to be used in model
+journal_features = [
+    'km Z5-T1-T2.6',
+    'perceived trainingSuccess.6',
+    'perceived recovery',
+    'perceived exertion.4',
+    'perceived exertion.3',
+    'km Z5-T1-T2.4',
+    'km sprinting.5',
+    'nr. sessions.5',
+    'strength training.6',
+    'km Z3-4.1',
+    'perceived recovery.1',
+    'nr. sessions.2',
+    'km Z5-T1-T2.5',
+    'km Z3-4.3',
+    'perceived trainingSuccess.4',
+    'total km.1',
+    'hours alternative.4',
+    'perceived recovery.6',
+    'perceived recovery.3',
+    'hours alternative.6'
+]
+
+#probalby wont be used but added here
+all_features = ['nr. sessions', 'total km', 'km Z3-4', 'km Z5-T1-T2', 'km sprinting', 'strength training', 'hours alternative', 'perceived exertion', 'perceived trainingSuccess', 'perceived recovery',
+                'nr. sessions.1', 'total km.1', 'km Z3-4.1', 'km Z5-T1-T2.1', 'km sprinting.1', 'strength training.1', 'hours alternative.1', 'perceived exertion.1', 'perceived trainingSuccess.1', 'perceived recovery.1', 
+                'nr. sessions.2', 'total km.2', 'km Z3-4.2', 'km Z5-T1-T2.2', 'km sprinting.2', 'strength training.2', 'hours alternative.2', 'perceived exertion.2', 'perceived trainingSuccess.2', 'perceived recovery.2', 
+                'nr. sessions.3', 'total km.3', 'km Z3-4.3', 'km Z5-T1-T2.3', 'km sprinting.3', 'strength training.3', 'hours alternative.3', 'perceived exertion.3', 'perceived trainingSuccess.3', 'perceived recovery.3', 
+                'nr. sessions.4', 'total km.4', 'km Z3-4.4', 'km Z5-T1-T2.4', 'km sprinting.4', 'strength training.4', 'hours alternative.4', 'perceived exertion.4', 'perceived trainingSuccess.4', 'perceived recovery.4', 
+                'nr. sessions.5', 'total km.5', 'km Z3-4.5', 'km Z5-T1-T2.5', 'km sprinting.5', 'strength training.5', 'hours alternative.5', 'perceived exertion.5', 'perceived trainingSuccess.5', 'perceived recovery.5', 
+                'nr. sessions.6', 'total km.6', 'km Z3-4.6', 'km Z5-T1-T2.6', 'km sprinting.6', 'strength training.6', 'hours alternative.6', 'perceived exertion.6', 'perceived trainingSuccess.6', 'perceived recovery.6',
+                'Athlete ID', 'injury', 'Date']
 #sort data by athlete ID and Date for chronological order for time-series analysis
 df = df.sort_values(by=['Athlete_ID', 'Date'])
 
@@ -86,14 +119,21 @@ df['weekly_std_load_obj'] = df.groupby('Athlete ID')['objective_training_load'].
 df['monotony_obj'] = df['weekly_avg_load_obj'] / df['weekly_std_load_obj']
 df['objective_strain'] = df['objective_training_load'] * df['monotony_obj']
 
-# Handle NaN and infinite values that arise from calculations
-df.replace([np.inf, -np.inf], np.nan, inplace=True) # np.inf = infinity replace with np.nan = 'not a number'
-df.fillna(0, inplace=True) # all nan become '0'
-
 #Define features to be used ofr the objective model
 #------------------------------------------------------------ ADD MORE FEATURES HERE-------------------
 print('not done with setting features for model to use')
 obj_features = ['objective_strain', 'objective_acwr']
+
+# Handle NaN and infinite values that arise from calculations
+df.replace([np.inf, -np.inf], np.nan, inplace=True) # np.inf = infinity replace with np.nan = 'not a number'
+#counter for imputed data
+# first sum counts true per col, second counts across columns
+imputed_data_objective = df[obj_features].isna().sum().sum()
+df.fillna(0, inplace=True) # all nan become '0'
+
+print('Objective Model Imputations:')
+print(f'total data points imputed (set to 0): {imputed_data_objective}')
+
 data_obj = df[obj_features].values
 
 #4. Create Time-Series Sequences & Split Data 
