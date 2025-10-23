@@ -12,7 +12,7 @@
 to create environment
   1) go to folder containing project 
   2) run in terminal 
-        python -m venv venv
+        python -m venv <name>
 
  to start environment
    venv\Scripts\activate
@@ -21,8 +21,10 @@ close environment
    deactivate
 
 ----------------------    install libraries    -----------------------
-               run this in terminal for (3) libraries
-               pip install pandas scikit-learn altair
+            run this in terminal for (3) libraries
+                pip install pandas scikit-learn altair 
+            (3) more libraries   
+                pip install matplotlib seaborn tabulate
 
 -------------------    run file    -----------------------------------
  in terminal: python *filename  
@@ -70,6 +72,34 @@ push (final step)
         Why was this .git file made? when adding folders to main branch, git will
         treat them as a new submodule and auto generate this file
        
+4) -- ERROR -- couldnt activate venv
+            
+            'is not recognized as the name of a 
+            cmdlet, function, script file, or operable program. Check the spelling of the name, or if a path was 
+            included, verify that the path is correct and try again.'
+            
+    4.1) wasnt in correct folder when starting venv. need to be in 'CombinedSportsDataDaily'
+    
+5) --ERROR -- have larger than 100 MB files 
+    5.1) install git LFS on local machine Git Large File Storage
+        in BASH - run the following commands - 
+            git lfs install 
+        track large files 
+            git lfs track "file path here"
+        additional line for git add
+            git add .gitattributes
+            git add . 
+            git commit -m "insightfulish msg"
+            git push origin main
+
+6) -- Error -- 
+    6.1) need git tools - filter repo 
+            run in git bash window
+             pip install git-filter-repo     
 
 
+git commands
+    git restore --staged .
+    
+                   
 """

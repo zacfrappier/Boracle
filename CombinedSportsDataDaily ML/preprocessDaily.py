@@ -3,7 +3,7 @@ import numpy as np
 import os
 from datetime import datetime
 import pickle
-from sklearn.preprocessing import MinMaxScalar
+from sklearn.preprocessing import MinMaxScaler
 
 # Data Preprocess
 #   1. Data Loading and initial inspection
@@ -60,7 +60,21 @@ df = pd.read_csv('timeseries (daily).csv')
 # Convert the 'Date" column to a datetime object
 df['Date'] = pd.to_datetime(df['Date'])
 
-#features to be used in model
+#features to be used in model here for reference
+journal_features_objective = [
+    'km Z5-T1-T2.6',
+    'km Z5-T1-T2.4',
+    'km sprinting.5',
+    'nr. sessions.5',
+    'strength training.6',
+    'km Z3-4.1',
+    'nr. sessions.2',
+    'km Z5-T1-T2.5',
+    'km Z3-4.3',
+    'total km.1',
+    'hours alternative.4',
+    'hours alternative.6'
+]
 journal_features = [
     'km Z5-T1-T2.6',
     'perceived trainingSuccess.6',
@@ -93,8 +107,18 @@ all_features = ['nr. sessions', 'total km', 'km Z3-4', 'km Z5-T1-T2', 'km sprint
                 'nr. sessions.5', 'total km.5', 'km Z3-4.5', 'km Z5-T1-T2.5', 'km sprinting.5', 'strength training.5', 'hours alternative.5', 'perceived exertion.5', 'perceived trainingSuccess.5', 'perceived recovery.5', 
                 'nr. sessions.6', 'total km.6', 'km Z3-4.6', 'km Z5-T1-T2.6', 'km sprinting.6', 'strength training.6', 'hours alternative.6', 'perceived exertion.6', 'perceived trainingSuccess.6', 'perceived recovery.6',
                 'Athlete ID', 'injury', 'Date']
+# both objective and subjective data 70 features
+raw_features_combined = all_features[:-3]
+# only objective data 49 features 
+raw_features_objective = ['nr. sessions', 'total km', 'km Z3-4', 'km Z5-T1-T2', 'km sprinting', 'strength training', 'hours alternative',
+                'nr. sessions.1', 'total km.1', 'km Z3-4.1', 'km Z5-T1-T2.1', 'km sprinting.1', 'strength training.1', 'hours alternative.1', 
+                'nr. sessions.2', 'total km.2', 'km Z3-4.2', 'km Z5-T1-T2.2', 'km sprinting.2', 'strength training.2', 'hours alternative.2',  
+                'nr. sessions.3', 'total km.3', 'km Z3-4.3', 'km Z5-T1-T2.3', 'km sprinting.3', 'strength training.3', 'hours alternative.3',  
+                'nr. sessions.4', 'total km.4', 'km Z3-4.4', 'km Z5-T1-T2.4', 'km sprinting.4', 'strength training.4', 'hours alternative.4',  
+                'nr. sessions.5', 'total km.5', 'km Z3-4.5', 'km Z5-T1-T2.5', 'km sprinting.5', 'strength training.5', 'hours alternative.5',  
+                'nr. sessions.6', 'total km.6', 'km Z3-4.6', 'km Z5-T1-T2.6', 'km sprinting.6', 'strength training.6', 'hours alternative.6'] 
 #sort data by athlete ID and Date for chronological order for time-series analysis
-df = df.sort_values(by=['Athlete_ID', 'Date'])
+df = df.sort_values(by=['Athlete ID', 'Date'])
 
 #checks for Nans, missing vlaues, and data types;
 #----------------------------------------------------------------ADD MORE INSPECTION HERE ------------------------
@@ -119,10 +143,9 @@ df['weekly_std_load_obj'] = df.groupby('Athlete ID')['objective_training_load'].
 df['monotony_obj'] = df['weekly_avg_load_obj'] / df['weekly_std_load_obj']
 df['objective_strain'] = df['objective_training_load'] * df['monotony_obj']
 
-#Define features to be used ofr the objective model
-#------------------------------------------------------------ ADD MORE FEATURES HERE-------------------
-print('not done with setting features for model to use')
-obj_features = ['objective_strain', 'objective_acwr']
+#Define features to be used for the objective model
+obj_features = ['objective_strain', 
+                'objective_acwr',] + raw_features_objective
 
 # Handle NaN and infinite values that arise from calculations
 df.replace([np.inf, -np.inf], np.nan, inplace=True) # np.inf = infinity replace with np.nan = 'not a number'
@@ -131,13 +154,13 @@ df.replace([np.inf, -np.inf], np.nan, inplace=True) # np.inf = infinity replace 
 imputed_data_objective = df[obj_features].isna().sum().sum()
 df.fillna(0, inplace=True) # all nan become '0'
 
-print('Objective Model Imputations:')
-print(f'total data points imputed (set to 0): {imputed_data_objective}')
+print('Objective Model Imputations')
+print(f'Total data points imputed (set to 0): {imputed_data_objective}')
 
 data_obj = df[obj_features].values
 
 #4. Create Time-Series Sequences & Split Data 
-scaler_obj = MinMaxScalar()
+scaler_obj = MinMaxScaler()
 scaled_data_obj = scaler_obj.fit_transform(data_obj)
 
 #create sequences 
@@ -155,7 +178,7 @@ np.save('preprocessed_data_objective/X_train.npy', X_obj_train)
 np.save('preprocessed_data_objective/X_val.npy', X_obj_val)
 np.save('preprocessed_data_objective/y_train.npy', y_obj_train)
 np.save('preprocessed_data_objective/y_val.npy',y_obj_val)
-with open('preprocessed_data_objective/scalar.pkl', 'wb') as f:
+with open('preprocessed_data_objective/scaler.pkl', 'wb') as f:
     pickle.dump(scaler_obj, f)
 print("Objective data saved successfully")
 
@@ -164,13 +187,58 @@ print('\n--- now starting data preprocessing for combined model ---')
 
 # Scaling and Feature Engineering for Combined Model
 # Normalize 'rpe' and 'total km' before combining tem
-scaler_combined = MinMaxScalar()
+scaler_combined = MinMaxScaler()
 df[['perceived exertion', 'total km']] = scaler_combined.fit_transform(df[['perceived exertion', 'total km']])
 
 # Create the combined Training Load Metric
 df['combined_training_load'] = df['perceived exertion'] * df['total km']
 
-# Rolling Metrics from combined training load
+# Combined ACWR
 df['acute_load_combined'] = df.groupby('Athlete ID')['combined_training_load'].transform(lambda x: x.rolling(window=7, min_periods=1).sum())
-df['chronic_load_combined'] = df.groupby('Athlete.ID')['acute_load_combined'].transform(lambda x: x.rolling(window=28, min_periods=1).mean())
+df['chronic_load_combined'] = df.groupby('Athlete ID')['acute_load_combined'].transform(lambda x: x.rolling(window=28, min_periods=1).mean())
+df['combined_acwr'] = df['acute_load_combined'] / df['chronic_load_combined']
 
+# Combined Strain
+df['weekly_avg_load_combined'] = df.groupby('Athlete ID')['combined_training_load'].transform(lambda x: x.rolling(window=7, min_periods=1).mean())
+df['weekly_std_load_combined'] = df.groupby('Athlete ID')['combined_training_load'].transform(lambda x : x.rolling(window=7, min_periods=1).std())
+df['combined_monotony'] = df['weekly_avg_load_combined'] / df['weekly_std_load_combined']
+df['combined_strain'] = df['combined_training_load'] * df['combined_monotony']
+
+#features to be used for subjective model
+combined_features = ['combined_monotony', 'combined_strain', 'combined_acwr'] + raw_features_combined
+
+# Handle and record NaN and infinities
+df.replace([np.inf, -np.inf], np.nan, inplace=True)
+#counter for imputed values 
+# first sum is for true per col, second sum for across cols
+imputed_data_combined = df[combined_features].isna().sum().sum()
+df.fillna(0, inplace=True)
+
+print("Combined Model Imputations")
+print(f'Total data points imputed (set to 0):{imputed_data_combined}')
+
+data_combined = df[combined_features].values
+
+# 4. Creating Time-Series Sequences & 5. Splitting Data
+# Scale the combined dataset (note: this is a new scaler, not the one from before)
+scaler_combined_final = MinMaxScaler()
+scaled_data_combined = scaler_combined_final.fit_transform(data_combined)
+
+# Create the sequences
+X_combined, y_combined = create_sequences(scaled_data_combined, TIME_STEPS)
+
+# Split the data into training and validation sets (e.g., 80/20 split)
+split_index_combined = int(0.8 * len(X_combined))
+X_combined_train, X_combined_val = X_combined[:split_index_combined], X_combined[split_index_combined:]
+y_combined_train, y_combined_val = y_combined[:split_index_combined], y_combined[split_index_combined:]
+ 
+print(f"Combined model data created with shapes: X_train={X_combined_train.shape}, y_train={y_combined_train.shape}")
+
+# Save preprocessed data and scaler for the combined model
+np.save('preprocessed_data_combined/X_train.npy', X_combined_train)
+np.save('preprocessed_data_combined/X_val.npy', X_combined_val)
+np.save('preprocessed_data_combined/y_train.npy', y_combined_train)
+np.save('preprocessed_data_combined/y_val.npy', y_combined_val)
+with open('preprocessed_data_combined/scaler.pkl', 'wb') as f:
+    pickle.dump(scaler_combined_final, f)
+print("Combined data saved successfully.")
