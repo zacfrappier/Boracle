@@ -26,6 +26,12 @@ close environment
             (3) more libraries   
                 pip install matplotlib seaborn tabulate
 
+----------------------- save libraries -------------------------------
+
+in terminal after library installation
+
+    pip freeze > requirements.txt
+
 -------------------    run file    -----------------------------------
  in terminal: python *filename  
  example: python KNN.py
