@@ -41,16 +41,24 @@ os.makedirs('preprocessed_data_combined', exist_ok=True)
 #   2) Controls Historical Context - determines duration of historical context for predictions
 #       Small Window - model will learn short term dependencies
 #       Large Window - more conext, older data likely to become noise
+
 #   choice of 30 b/c acwr metric, '7' may be better?
+# if performs poorly can cahnge this to 7-14
 TIME_STEPS = 30
 
 # function definition to create 3D time series sequences from 2D flat dataframe
 # also known as "sliding window" technique
-def create_sequences(data, time_steps):
+# MODIFIED function definition to create 3D time series sequences from separate X and Y data
+# This ensures Y is only the single injury label for the next step.
+def create_time_series_data(X_data, y_data, time_steps):
     X, y = [], []
-    for i in range(len(data) - time_steps):
-        X.append(data[i:(i + time_steps)]) # creates a sequence of 'time_steps' as input (X)
-        y.append(data[i + time_steps]) # next data point is the target (y)
+    # Ensure both X and y arrays are long enough to form a sequence and next step
+    max_len = min(len(X_data), len(y_data))
+    for i in range(max_len - time_steps):
+        # X is the sequence of features up to time_steps
+        X.append(X_data[i:(i + time_steps)]) 
+        # y is the target label (injury status) at the NEXT time step
+        y.append(y_data[i + time_steps]) 
     return np.array(X), np.array(y)
 
 #                   --- Load Data and Initial Inspection ---
@@ -121,9 +129,9 @@ raw_features_objective = ['nr. sessions', 'total km', 'km Z3-4', 'km Z5-T1-T2', 
 df = df.sort_values(by=['Athlete ID', 'Date'])
 
 #checks for Nans, missing vlaues, and data types;
-#----------------------------------------------------------------ADD MORE INSPECTION HERE ------------------------
+#--------   ADD MORE INSPECTION HERE   ------------------------
 print('not finished with initial data inspection')
-print(df.isnull().sum())
+print('number of null values:',df.isnull().sum())
 
 #               --- Preprocessing for Objective Model ---
 print('--- Starting preprocessing for Objective Model ---')
@@ -144,44 +152,46 @@ df['monotony_obj'] = df['weekly_avg_load_obj'] / df['weekly_std_load_obj']
 df['objective_strain'] = df['objective_training_load'] * df['monotony_obj']
 
 #Define features to be used for the objective model
-obj_features = ['objective_strain', 
+objective_features = ['objective_strain', 
                 'objective_acwr'] + raw_features_objective
 
 # Handle NaN and infinite values that arise from calculations
 df.replace([np.inf, -np.inf], np.nan, inplace=True) # np.inf = infinity replace with np.nan = 'not a number'
 #counter for imputed data
 # first sum counts true per col, second counts across columns
-imputed_data_objective = df[obj_features].isna().sum().sum()
+imputed_data_objective = df[objective_features].isna().sum().sum()
 df.fillna(0, inplace=True) # all nan become '0'
 
 print('Objective Model Imputations')
 print(f'Total data points imputed (set to 0): {imputed_data_objective}')
 
-data_obj = df[obj_features].values
+# SEPARATE X (features) and Y (target) data arrays
+data_objective_X = df[objective_features].values
+data_objective_y = df['injury'].values # 1D target array
 
-#4. Create Time-Series Sequences & Split Data 
-scaler_obj = MinMaxScaler()
-scaled_data_obj = scaler_obj.fit_transform(data_obj)
+# 4. Create Time-Series Sequences & Split Data 
+scaler_objective = MinMaxScaler()
+scaled_data_objective_X = scaler_objective.fit_transform(data_objective_X)
 
 #create sequences 
-X_obj, y_obj = create_sequences(scaled_data_obj, TIME_STEPS)
+X_objective, y_objective = create_time_series_data(scaled_data_objective_X, data_objective_y, TIME_STEPS)
 
 #Split data into training and validation sets
-split_index_obj = int(0.8 * len(X_obj)) #determines split, .8 = 80% train 20% validate
-X_obj_train, X_obj_val = X_obj[:split_index_obj], X_obj[split_index_obj:]
-y_obj_train, y_obj_val = y_obj[:split_index_obj], y_obj[split_index_obj:]
+split_index_obj = int(0.8 * len(X_objective)) #determines split, .8 = 80% train 20% validate
+X_objective_train, X_objective_val = X_objective[:split_index_obj], X_objective[split_index_obj:]
+y_objective_train, y_objective_val = y_objective[:split_index_obj], y_objective[split_index_obj:]
 
-print(f"Objective model data created with shape: X_train={X_obj_train.shape}, y_train={y_obj_train.shape}")
+print(f"Objective model data created with shape: X_train={X_objective_train.shape}, y_train={y_objective_train.shape}")
 
 #Save Preprocessed data and scaler for the objective model 
-np.save('preprocessed_data_objective/X_train.npy', X_obj_train)
-np.save('preprocessed_data_objective/X_val.npy', X_obj_val)
-np.save('preprocessed_data_objective/y_train.npy', y_obj_train)
-np.save('preprocessed_data_objective/y_val.npy',y_obj_val)
+np.save('preprocessed_data_objective/X_train.npy', X_objective_train)
+np.save('preprocessed_data_objective/X_val.npy', X_objective_val)
+np.save('preprocessed_data_objective/y_train.npy', y_objective_train)
+np.save('preprocessed_data_objective/y_val.npy',y_objective_val)
 with open('preprocessed_data_objective/scaler.pkl', 'wb') as f:
-    pickle.dump(scaler_obj, f)
+    pickle.dump(scaler_objective, f)
 with open('preprocessed_data_objective/objective_features.pkl', 'wb') as f:
-    pickle.dump(obj_features, f)
+    pickle.dump(objective_features, f)
 print("Objective data saved successfully")
 
 #           --- Preprocessing for Combined Model ---
@@ -219,15 +229,17 @@ df.fillna(0, inplace=True)
 print("Combined Model Imputations")
 print(f'Total data points imputed (set to 0):{imputed_data_combined}')
 
-data_combined = df[combined_features].values
+# SEPARATE X (features) and Y (target) data arrays
+data_combined_X = df[combined_features].values
+data_combined_y = df['injury'].values # 1D target array
 
 # 4. Creating Time-Series Sequences & 5. Splitting Data
 # Scale the combined dataset (note: this is a new scaler, not the one from before)
 scaler_combined_final = MinMaxScaler()
-scaled_data_combined = scaler_combined_final.fit_transform(data_combined)
+scaled_data_combined_X = scaler_combined_final.fit_transform(data_combined_X)
 
-# Create the sequences
-X_combined, y_combined = create_sequences(scaled_data_combined, TIME_STEPS)
+# Create the sequences using the new function that handles X and y separately
+X_combined, y_combined = create_time_series_data(scaled_data_combined_X, data_combined_y, TIME_STEPS)
 
 # Split the data into training and validation sets (e.g., 80/20 split)
 split_index_combined = int(0.8 * len(X_combined))
