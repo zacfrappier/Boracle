@@ -23,14 +23,18 @@ close environment
 ----------------------    install libraries    -----------------------
             run this in terminal for (3) libraries
                 pip install pandas scikit-learn altair 
-            (3) more libraries   
-                pip install matplotlib seaborn tabulate
+            (5) more libraries   
+                pip install matplotlib seaborn tabulate torch tqdm
 
 ----------------------- save libraries -------------------------------
 
 in terminal after library installation
 
     pip freeze > requirements.txt
+
+when installing on new device run 
+
+    pip install -r requirements.txt
 
 -------------------    run file    -----------------------------------
  in terminal: python *filename  
