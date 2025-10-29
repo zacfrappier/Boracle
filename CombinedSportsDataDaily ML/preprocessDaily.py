@@ -145,7 +145,7 @@ df['objective_strain'] = df['objective_training_load'] * df['monotony_obj']
 
 #Define features to be used for the objective model
 obj_features = ['objective_strain', 
-                'objective_acwr',] + raw_features_objective
+                'objective_acwr'] + raw_features_objective
 
 # Handle NaN and infinite values that arise from calculations
 df.replace([np.inf, -np.inf], np.nan, inplace=True) # np.inf = infinity replace with np.nan = 'not a number'
@@ -180,6 +180,8 @@ np.save('preprocessed_data_objective/y_train.npy', y_obj_train)
 np.save('preprocessed_data_objective/y_val.npy',y_obj_val)
 with open('preprocessed_data_objective/scaler.pkl', 'wb') as f:
     pickle.dump(scaler_obj, f)
+with open('preprocessed_data_objective/objective_features.pkl', 'wb') as f:
+    pickle.dump(obj_features, f)
 print("Objective data saved successfully")
 
 #           --- Preprocessing for Combined Model ---
@@ -241,4 +243,6 @@ np.save('preprocessed_data_combined/y_train.npy', y_combined_train)
 np.save('preprocessed_data_combined/y_val.npy', y_combined_val)
 with open('preprocessed_data_combined/scaler.pkl', 'wb') as f:
     pickle.dump(scaler_combined_final, f)
+with open('preprocessed_data_combined/combined_features.pkl', 'wb') as f:
+    pickle.dump(combined_features, f)
 print("Combined data saved successfully.")
