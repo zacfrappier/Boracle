@@ -57,6 +57,11 @@ EARLY_STOPPING_PATIENCE = 10
 CLASSIFICATION_THRESHOLD = 0.5
 USE_FOCAL_LOSS = False
 
+# --- directory for saved graphs ---
+GRAPH_DIR = 'gru_model_plots'
+os.makedirs(GRAPH_DIR, exist_ok=True)
+print(f"Saving plots to directory: {GRAPH_DIR}")
+
 # --- Utility Classes and Functions ---
 #=======================================================================
 
@@ -209,7 +214,7 @@ def plot_training_history(train_losses, val_losses, train_metrics, val_metrics, 
     plt.ylabel('Loss')
     plt.legend()
     plt.grid(True)
-    plt.savefig(f'{model_name}_loss_history.png')
+    plt.savefig(os.path.join(GRAPH_DIR, f'{model_name}_loss_history.png'))
     plt.close()
     
     # 2. TPR/TNR
@@ -226,7 +231,7 @@ def plot_training_history(train_losses, val_losses, train_metrics, val_metrics, 
     plt.ylabel('Rate')
     plt.legend()
     plt.grid(True)
-    plt.savefig(f'{model_name}_tpr_tnr_history.png')
+    plt.savefig(os.path.join(GRAPH_DIR,f'{model_name}_tpr_tnr_history.png'))
     plt.close()
     
     # 3. F1 and Precision
@@ -242,7 +247,7 @@ def plot_training_history(train_losses, val_losses, train_metrics, val_metrics, 
     plt.ylabel('Score')
     plt.legend()
     plt.grid(True)
-    plt.savefig(f'{model_name}_f1_prec_history.png')
+    plt.savefig(os.path.join(GRAPH_DIR,f'{model_name}_f1_prec_history.png'))
     plt.close()
 
 def plot_final_metrics(val_targets, val_pred, cm, model_name):
@@ -257,7 +262,7 @@ def plot_final_metrics(val_targets, val_pred, cm, model_name):
     plt.title(f'{model_name}: Confusion Matrix on Validation Set')
     plt.ylabel('True Label')
     plt.xlabel('Predicted Label')
-    plt.savefig(f'{model_name}_confusion_matrix.png')
+    plt.savefig(os.path.join(GRAPH_DIR,f'{model_name}_confusion_matrix.png'))
     plt.close()
     
     # ROC curve
@@ -273,7 +278,7 @@ def plot_final_metrics(val_targets, val_pred, cm, model_name):
     plt.title(f'{model_name}: Receiver Operating Characteristic (ROC) Curve')
     plt.legend(loc="lower right")
     plt.grid(True)
-    plt.savefig(f'{model_name}_roc_curve.png')
+    plt.savefig(os.path.join(GRAPH_DIR,f'{model_name}_roc_curve.png'))
     plt.close()
     
     # Precision-Recall curve
@@ -286,7 +291,7 @@ def plot_final_metrics(val_targets, val_pred, cm, model_name):
     plt.title(f'{model_name}: Precision-Recall Curve')
     plt.legend(loc="lower left")
     plt.grid(True)
-    plt.savefig(f'{model_name}_pr_curve.png')
+    plt.savefig(os.path.join(GRAPH_DIR,f'{model_name}_pr_curve.png'))
     plt.close()
     
     return roc_auc, pr_auc
