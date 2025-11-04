@@ -50,7 +50,7 @@ else:
     
 # --- Common/Remaining Hyperparameters ---
 # These are the same regardless of the mode
-SEQUENCE_LENGTH = 7
+SEQUENCE_LENGTH = 30
 NUM_LAYERS = 2
 DROPOUT = 0.3
 EARLY_STOPPING_PATIENCE = 10
