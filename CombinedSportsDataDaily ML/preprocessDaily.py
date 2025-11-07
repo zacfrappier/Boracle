@@ -170,16 +170,25 @@ data_objective_X = df[objective_features].values
 data_objective_y = df['injury'].values # 1D target array
 
 # 4. Create Time-Series Sequences & Split Data 
-scaler_objective = MinMaxScaler()
-scaled_data_objective_X = scaler_objective.fit_transform(data_objective_X)
+# scaler_objective = MinMaxScaler() # NEVER DO THIS, introduces data leakage, gives information thats not suppose to be there 
+#scaled_data_objective_X = scaler_objective.fit_transform(data_objective_X)
 
 #create sequences 
-X_objective, y_objective = create_time_series_data(scaled_data_objective_X, data_objective_y, TIME_STEPS)
+X_objective, y_objective = create_time_series_data(data_objective_X, data_objective_y, TIME_STEPS)
 
 #Split data into training and validation sets
 split_index_obj = int(0.8 * len(X_objective)) #determines split, .8 = 80% train 20% validate
 X_objective_train, X_objective_val = X_objective[:split_index_obj], X_objective[split_index_obj:]
 y_objective_train, y_objective_val = y_objective[:split_index_obj], y_objective[split_index_obj:]
+
+# transform and normalize 
+X_objective_train = MinMaxScaler.fit_transform(X_objective_train)
+X_objective_val = MinMaxScaler.fit_transform(X_objective_val)
+y_objective_train = MinMaxScaler.fit_transform(y_objective_train)
+y_objective_val = MinMaxScaler.fit_transform(y_objective_val)
+
+# not sure why this is here 
+scaler_objective = MinMaxScaler()
 
 print(f"Objective model data created with shape: X_train={X_objective_train.shape}, y_train={y_objective_train.shape}")
 
@@ -188,8 +197,8 @@ np.save('preprocessed_data_objective/X_train.npy', X_objective_train)
 np.save('preprocessed_data_objective/X_val.npy', X_objective_val)
 np.save('preprocessed_data_objective/y_train.npy', y_objective_train)
 np.save('preprocessed_data_objective/y_val.npy',y_objective_val)
-with open('preprocessed_data_objective/scaler.pkl', 'wb') as f:
-    pickle.dump(scaler_objective, f)
+#with open('preprocessed_data_objective/scaler.pkl', 'wb') as f:
+#    pickle.dump(scaler_objective, f)
 with open('preprocessed_data_objective/objective_features.pkl', 'wb') as f:
     pickle.dump(objective_features, f)
 print("Objective data saved successfully")
@@ -209,6 +218,7 @@ df['combined_training_load'] = df['perceived exertion'] * df['total km']
 df['acute_load_combined'] = df.groupby('Athlete ID')['combined_training_load'].transform(lambda x: x.rolling(window=7, min_periods=1).sum())
 df['chronic_load_combined'] = df.groupby('Athlete ID')['acute_load_combined'].transform(lambda x: x.rolling(window=28, min_periods=1).mean())
 df['combined_acwr'] = df['acute_load_combined'] / df['chronic_load_combined']
+
 
 # Combined Strain
 df['weekly_avg_load_combined'] = df.groupby('Athlete ID')['combined_training_load'].transform(lambda x: x.rolling(window=7, min_periods=1).mean())
