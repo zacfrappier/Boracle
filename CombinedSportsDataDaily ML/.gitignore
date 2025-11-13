@@ -1,1 +1,5 @@
 *.npy
+
+/preprocssing_data_combine
+/preprocssing_data_objective
+/preprocessed_data
