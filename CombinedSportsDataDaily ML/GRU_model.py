@@ -58,7 +58,7 @@ CLASSIFICATION_THRESHOLD = 0.5
 USE_FOCAL_LOSS = False
 
 # --- directory for saved graphs ---
-GRAPH_DIR = 'gru_model_plots'
+GRAPH_DIR = 'Recent_trial'
 os.makedirs(GRAPH_DIR, exist_ok=True)
 print(f"Saving plots to directory: {GRAPH_DIR}")
 
@@ -448,7 +448,7 @@ def run_full_training(model_type, data_dir, feature_file_name):
         'feature_names': feature_names
     }
     
-    results_file = f'gru_model_plots/{model_type.lower()}_gru_model_results.json'
+    results_file = f'Recent_Trial/{model_type.lower()}_gru_model_results.json'
     with open(results_file, 'w') as f:
         json.dump(results, f, indent=4)
         
