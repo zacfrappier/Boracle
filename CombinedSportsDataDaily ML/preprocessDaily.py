@@ -9,21 +9,21 @@ from sklearn.preprocessing import MinMaxScaler
 #   1. Data Loading and initial inspection
 #           missing values, outliers, datatypes
 #           conduct imputation, transformation if needed
-#   2. Scaling/Normalizing                      
-#           scale between 0-1
-#           store scaler object for later use of inverse transformation during prediction evaluation
-#   3. Feature Engineering (normalize data first before this step)
+#   2. Feature Engineering (normalize data first before this step)
 #           create new features
 #           normalize values before making feature to avoid feature overweighing
-#   4. Creating Time-Series Sequences - .pkl files
+#   3. Creating Time-Series Sequences - .pkl files
 #           GRU requires input data into sequences 
 #           transform flat time series data into 3D array
 #           'Look-back' window - # timestpes to consider a prediction
 #           input-output pairs
-#   5. Splitting Data
+#   4. Splitting Data
 #           training/testing set 
 #           save large numerical data with numpy .npy files
 #           save scalar objects with pickle
+#   5. Scaling/Normalizing                      
+#           scale between 0-1
+#           store scaler object for later use of inverse transformation during prediction evaluation
 
 #                   --- Global Configuration ---
 #   set seed
@@ -182,13 +182,14 @@ X_objective_train, X_objective_val = X_objective[:split_index_obj], X_objective[
 y_objective_train, y_objective_val = y_objective[:split_index_obj], y_objective[split_index_obj:]
 
 # transform and normalize 
-X_objective_train = MinMaxScaler.fit_transform(X_objective_train)
-X_objective_val = MinMaxScaler.fit_transform(X_objective_val)
-y_objective_train = MinMaxScaler.fit_transform(y_objective_train)
-y_objective_val = MinMaxScaler.fit_transform(y_objective_val)
 
-# not sure why this is here 
-scaler_objective = MinMaxScaler()
+scaler_objective_X = MinMaxScaler() #first create scalar object, to call on class
+scalar_objective_y = MinMaxScaler()
+
+X_objective_train = scaler_objective_X.fit_transform(X_objective_train)
+X_objective_val = scaler_objective_X.transform(X_objective_val)
+y_objective_train = scalar_objective_y.fit_transform(y_objective_train)
+y_objective_val = scalar_objective_y.transform(y_objective_val)
 
 print(f"Objective model data created with shape: X_train={X_objective_train.shape}, y_train={y_objective_train.shape}")
 
@@ -246,6 +247,7 @@ data_combined_y = df['injury'].values # 1D target array
 # 4. Creating Time-Series Sequences & 5. Splitting Data
 # Scale the combined dataset (note: this is a new scaler, not the one from before)
 scaler_combined_final = MinMaxScaler()
+
 scaled_data_combined_X = scaler_combined_final.fit_transform(data_combined_X)
 
 # Create the sequences using the new function that handles X and y separately
@@ -256,6 +258,12 @@ split_index_combined = int(0.8 * len(X_combined))
 X_combined_train, X_combined_val = X_combined[:split_index_combined], X_combined[split_index_combined:]
 y_combined_train, y_combined_val = y_combined[:split_index_combined], y_combined[split_index_combined:]
  
+# scale data here
+X_combined_train = MinMaxScaler.fit_transform(X_combined_train)
+X_combined_val = MinMaxScaler.fit_transform(X_combined_val)
+y_combined_train = MinMaxScaler.fit_transform(y_combined_train)
+y_combined_val = MinMaxScaler.fit_transform(y_combined_val)
+
 print(f"Combined model data created with shapes: X_train={X_combined_train.shape}, y_train={y_combined_train.shape}")
 
 # Save preprocessed data and scaler for the combined model
