@@ -51,7 +51,13 @@ add descriptor to upload
     git commit -m "super duper importants fancy pant code"
 push (final step)
     git push
-    
+
+--------------------- Git Ignore -------------------------------------
+
+echo "*.npy" >> .gitignore
+git add .gitignore
+git commit -m "Ignore large .npy data files"
+
  -----------------------Error Handling--------------------------------
 
 1)--ERROR-- incase error "cannot be loaded b/c running scripts is disabled on this system"

@@ -136,7 +136,7 @@ print('number of null values:',df.isnull().sum())
 #               --- Preprocessing for Objective Model ---
 print('--- Starting preprocessing for Objective Model ---')
 
-# 2 & 3 Scaling & Feature Engineering for Objective model 
+#  Feature Engineering for Objective model 
 # scaling skipped for singular feature
 df['objective_training_load'] = df['total km']
 
@@ -170,8 +170,6 @@ data_objective_X = df[objective_features].values
 data_objective_y = df['injury'].values # 1D target array
 
 # 4. Create Time-Series Sequences & Split Data 
-# scaler_objective = MinMaxScaler() # NEVER DO THIS, introduces data leakage, gives information thats not suppose to be there 
-#scaled_data_objective_X = scaler_objective.fit_transform(data_objective_X)
 
 #create sequences 
 X_objective, y_objective = create_time_series_data(data_objective_X, data_objective_y, TIME_STEPS)
@@ -184,12 +182,23 @@ y_objective_train, y_objective_val = y_objective[:split_index_obj], y_objective[
 # transform and normalize 
 
 scaler_objective_X = MinMaxScaler() #first create scalar object, to call on class
-scalar_objective_y = MinMaxScaler()
 
-X_objective_train = scaler_objective_X.fit_transform(X_objective_train)
-X_objective_val = scaler_objective_X.transform(X_objective_val)
-y_objective_train = scalar_objective_y.fit_transform(y_objective_train)
-y_objective_val = scalar_objective_y.transform(y_objective_val)
+# b/c x is 3D, need to flatten
+#flatten to 2D
+n_train, t, f = X_objective_train.shape
+X_train_flat = X_objective_train.reshape(-1, f)
+
+# scaling (fit only on train!)
+X_train_flat = scaler_objective_X.fit_transform(X_train_flat)
+X_val_flat   = scaler_objective_X.transform(X_objective_val.reshape(-1, f))
+
+# reshape back
+X_objective_train = X_train_flat.reshape(n_train, t, f)
+X_objective_val   = X_val_flat.reshape(len(X_objective_val), t, f)
+
+#b/c y is label, no need to scale, just use float (0 or 1)
+y_objective_train = y_objective_train.astype(float)
+y_objective_val = y_objective_val.astype(float)
 
 print(f"Objective model data created with shape: X_train={X_objective_train.shape}, y_train={y_objective_train.shape}")
 
@@ -198,8 +207,8 @@ np.save('preprocessed_data_objective/X_train.npy', X_objective_train)
 np.save('preprocessed_data_objective/X_val.npy', X_objective_val)
 np.save('preprocessed_data_objective/y_train.npy', y_objective_train)
 np.save('preprocessed_data_objective/y_val.npy',y_objective_val)
-#with open('preprocessed_data_objective/scaler.pkl', 'wb') as f:
-#    pickle.dump(scaler_objective, f)
+with open('preprocessed_data_objective/scaler.pkl', 'wb') as f:
+    pickle.dump(scaler_objective_X, f)
 with open('preprocessed_data_objective/objective_features.pkl', 'wb') as f:
     pickle.dump(objective_features, f)
 print("Objective data saved successfully")
@@ -208,9 +217,6 @@ print("Objective data saved successfully")
 print('\n--- now starting data preprocessing for combined model ---')
 
 # Scaling and Feature Engineering for Combined Model
-# Normalize 'rpe' and 'total km' before combining tem
-scaler_combined = MinMaxScaler()
-df[['perceived exertion', 'total km']] = scaler_combined.fit_transform(df[['perceived exertion', 'total km']])
 
 # Create the combined Training Load Metric
 df['combined_training_load'] = df['perceived exertion'] * df['total km']
@@ -246,12 +252,10 @@ data_combined_y = df['injury'].values # 1D target array
 
 # 4. Creating Time-Series Sequences & 5. Splitting Data
 # Scale the combined dataset (note: this is a new scaler, not the one from before)
-scaler_combined_final = MinMaxScaler()
 
-scaled_data_combined_X = scaler_combined_final.fit_transform(data_combined_X)
 
 # Create the sequences using the new function that handles X and y separately
-X_combined, y_combined = create_time_series_data(scaled_data_combined_X, data_combined_y, TIME_STEPS)
+X_combined, y_combined = create_time_series_data(data_combined_X, data_combined_y, TIME_STEPS)
 
 # Split the data into training and validation sets (e.g., 80/20 split)
 split_index_combined = int(0.8 * len(X_combined))
@@ -259,10 +263,26 @@ X_combined_train, X_combined_val = X_combined[:split_index_combined], X_combined
 y_combined_train, y_combined_val = y_combined[:split_index_combined], y_combined[split_index_combined:]
  
 # scale data here
-X_combined_train = MinMaxScaler.fit_transform(X_combined_train)
-X_combined_val = MinMaxScaler.fit_transform(X_combined_val)
-y_combined_train = MinMaxScaler.fit_transform(y_combined_train)
-y_combined_val = MinMaxScaler.fit_transform(y_combined_val)
+scaler_combined_X = MinMaxScaler()
+
+# b/c x is 3D, need to flatten
+#flatten to 2D
+# flatten to 2D
+n_train, t, f = X_combined_train.shape
+X_train_flat = X_combined_train.reshape(-1, f)
+X_val_flat = X_combined_val.reshape(-1, f)
+
+# scaling (fit only on train!)
+X_train_flat = scaler_combined_X.fit_transform(X_train_flat)
+X_val_flat   = scaler_combined_X.transform(X_val_flat)
+
+# reshape back
+X_combined_train = X_train_flat.reshape(n_train, t, f)
+X_combined_val   = X_val_flat.reshape(len(X_combined_val), t, f)
+
+#b/c y is label, no need to scale, just use float (0 or 1)
+y_combined_train = y_combined_train.astype(float)
+y_combined_val = y_combined_val.astype(float)
 
 print(f"Combined model data created with shapes: X_train={X_combined_train.shape}, y_train={y_combined_train.shape}")
 
@@ -272,7 +292,7 @@ np.save('preprocessed_data_combined/X_val.npy', X_combined_val)
 np.save('preprocessed_data_combined/y_train.npy', y_combined_train)
 np.save('preprocessed_data_combined/y_val.npy', y_combined_val)
 with open('preprocessed_data_combined/scaler.pkl', 'wb') as f:
-    pickle.dump(scaler_combined_final, f)
+    pickle.dump(scaler_combined_X, f)
 with open('preprocessed_data_combined/combined_features.pkl', 'wb') as f:
     pickle.dump(combined_features, f)
 print("Combined data saved successfully.")
