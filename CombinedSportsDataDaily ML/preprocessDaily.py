@@ -26,10 +26,11 @@ from sklearn.preprocessing import MinMaxScaler
 #           store scaler object for later use of inverse transformation during prediction evaluation
 
 #                   --- Global Configuration ---
-#   set seed
-np.random.seed(9)
+np.random.seed(9) 
+TIME_STEPS = 30
+TRAIN_FRAC = 0.8 
 
-#   Create directory if already doesnt exist
+#   Create directory if doesnt exist
 os.makedirs('preprocessed_data_objective', exist_ok=True)
 os.makedirs('preprocessed_data_combined', exist_ok=True)
 
@@ -43,32 +44,89 @@ os.makedirs('preprocessed_data_combined', exist_ok=True)
 #       Large Window - more conext, older data likely to become noise
 
 #   choice of 30 b/c acwr metric, '7' may be better?
-# if performs poorly can cahnge this to 7-14
-TIME_STEPS = 30
+# if performs poorly can change this to 7-14
 
-# function definition to create 3D time series sequences from 2D flat dataframe
-# also known as "sliding window" technique
-# MODIFIED function definition to create 3D time series sequences from separate X and Y data
-# This ensures Y is only the single injury label for the next step.
-def create_time_series_data(X_data, y_data, time_steps):
-    X, y = [], []
-    # Ensure both X and y arrays are long enough to form a sequence and next step
-    max_len = min(len(X_data), len(y_data))
+# -------------- helper functions --------------
+def create_sequences_for_group(X_arr, y_arr, time_steps):
+    """Create sliding-window sequences for a single contiguous series (athlete).
+       Returns X_seqs (n_seq, time_steps, n_feat), y_seq (n_seq,)
+    """
+    Xs, ys = [], []
+    max_len = min(len(X_arr), len(y_arr))
     for i in range(max_len - time_steps):
-        # X is the sequence of features up to time_steps
-        X.append(X_data[i:(i + time_steps)]) 
-        # y is the target label (injury status) at the NEXT time step
-        y.append(y_data[i + time_steps]) 
-    return np.array(X), np.array(y)
+        Xs.append(X_arr[i:(i + time_steps)])
+        ys.append(y_arr[i + time_steps])
+    if len(Xs) == 0:
+        return np.empty((0, time_steps, X_arr.shape[1])), np.empty((0,), dtype=int)
+    return np.array(Xs), np.array(ys)
+
+def per_athlete_train_val_split(df, feature_cols, target_col, time_steps, train_frac=0.8):
+    """For each athlete, create sequences and split them in time order into train/val.
+       Returns concatenated X_train, X_val, y_train, y_val (3D arrays for Xs).
+    """
+    X_train_list, X_val_list = [], []
+    y_train_list, y_val_list = [], []
+
+    # Group by athlete in chronological order
+    for athlete, g in df.groupby('Athlete ID'):
+        g = g.sort_values('Date')
+        X_arr = g[feature_cols].values
+        y_arr = g[target_col].values
+        X_seqs, y_seqs = create_sequences_for_group(X_arr, y_arr, time_steps)
+        if X_seqs.shape[0] == 0:
+            continue
+        split_idx = int(train_frac * X_seqs.shape[0])
+        # if split_idx==0, all sequences go to val; handle gracefully
+        if split_idx > 0:
+            X_train_list.append(X_seqs[:split_idx])
+            y_train_list.append(y_seqs[:split_idx])
+        if split_idx < X_seqs.shape[0]:
+            X_val_list.append(X_seqs[split_idx:])
+            y_val_list.append(y_seqs[split_idx:])
+
+    if len(X_train_list) == 0:
+        X_train = np.empty((0, time_steps, len(feature_cols)))
+        y_train = np.empty((0,), dtype=int)
+    else:
+        X_train = np.concatenate(X_train_list, axis=0)
+        y_train = np.concatenate(y_train_list, axis=0).astype(int)
+
+    if len(X_val_list) == 0:
+        X_val = np.empty((0, time_steps, len(feature_cols)))
+        y_val = np.empty((0,), dtype=int)
+    else:
+        X_val = np.concatenate(X_val_list, axis=0)
+        y_val = np.concatenate(y_val_list, axis=0).astype(int)
+
+    return X_train, X_val, y_train, y_val
+
+def scale_3d_train_val(X_train, X_val):
+    """Flatten train & val (time dim merged with samples), fit scaler on train, transform both,
+       and reshape back to 3D."""
+    if X_train.size == 0:
+        return X_train, X_val, None
+    n_train, t, f = X_train.shape
+    n_val = 0 if X_val.size == 0 else X_val.shape[0]
+
+    train_flat = X_train.reshape(-1, f)
+    val_flat = X_val.reshape(-1, f) if n_val > 0 else np.empty((0, f))
+
+    scaler = MinMaxScaler()
+    train_flat_scaled = scaler.fit_transform(train_flat)
+    val_flat_scaled = scaler.transform(val_flat) if n_val > 0 else val_flat
+
+    X_train_scaled = train_flat_scaled.reshape(n_train, t, f)
+    X_val_scaled = val_flat_scaled.reshape(n_val, t, f) if n_val > 0 else X_val
+    return X_train_scaled, X_val_scaled, scaler
+
 
 #                   --- Load Data and Initial Inspection ---
-#   Load Dataset
-df = pd.read_csv('timeseries (daily).csv')
+df = pd.read_csv('timeseries (daily).csv')      #load dataset
+df['Date'] = pd.to_datetime(df['Date'])  # Convert the 'Date" column to a datetime object
+#sort data by athlete ID and Date for chronological order for time-series analysis
+df = df.sort_values(['Athlete ID', 'Date']).reset_index(drop=True) 
 
-# Convert the 'Date" column to a datetime object
-df['Date'] = pd.to_datetime(df['Date'])
-
-#features to be used in model here for reference
+#additional sets of features incase needed
 journal_features_objective = [
     'km Z5-T1-T2.6',
     'km Z5-T1-T2.4',
@@ -105,8 +163,6 @@ journal_features = [
     'perceived recovery.3',
     'hours alternative.6'
 ]
-
-#probalby wont be used but added here
 all_features = ['nr. sessions', 'total km', 'km Z3-4', 'km Z5-T1-T2', 'km sprinting', 'strength training', 'hours alternative', 'perceived exertion', 'perceived trainingSuccess', 'perceived recovery',
                 'nr. sessions.1', 'total km.1', 'km Z3-4.1', 'km Z5-T1-T2.1', 'km sprinting.1', 'strength training.1', 'hours alternative.1', 'perceived exertion.1', 'perceived trainingSuccess.1', 'perceived recovery.1', 
                 'nr. sessions.2', 'total km.2', 'km Z3-4.2', 'km Z5-T1-T2.2', 'km sprinting.2', 'strength training.2', 'hours alternative.2', 'perceived exertion.2', 'perceived trainingSuccess.2', 'perceived recovery.2', 
@@ -115,8 +171,8 @@ all_features = ['nr. sessions', 'total km', 'km Z3-4', 'km Z5-T1-T2', 'km sprint
                 'nr. sessions.5', 'total km.5', 'km Z3-4.5', 'km Z5-T1-T2.5', 'km sprinting.5', 'strength training.5', 'hours alternative.5', 'perceived exertion.5', 'perceived trainingSuccess.5', 'perceived recovery.5', 
                 'nr. sessions.6', 'total km.6', 'km Z3-4.6', 'km Z5-T1-T2.6', 'km sprinting.6', 'strength training.6', 'hours alternative.6', 'perceived exertion.6', 'perceived trainingSuccess.6', 'perceived recovery.6',
                 'Athlete ID', 'injury', 'Date']
-# both objective and subjective data 70 features
-raw_features_combined = all_features[:-3]
+
+raw_features_combined = all_features[:-3] # both objective and subjective data 70 features minus name, date, sn
 # only objective data 49 features 
 raw_features_objective = ['nr. sessions', 'total km', 'km Z3-4', 'km Z5-T1-T2', 'km sprinting', 'strength training', 'hours alternative',
                 'nr. sessions.1', 'total km.1', 'km Z3-4.1', 'km Z5-T1-T2.1', 'km sprinting.1', 'strength training.1', 'hours alternative.1', 
@@ -125,174 +181,115 @@ raw_features_objective = ['nr. sessions', 'total km', 'km Z3-4', 'km Z5-T1-T2', 
                 'nr. sessions.4', 'total km.4', 'km Z3-4.4', 'km Z5-T1-T2.4', 'km sprinting.4', 'strength training.4', 'hours alternative.4',  
                 'nr. sessions.5', 'total km.5', 'km Z3-4.5', 'km Z5-T1-T2.5', 'km sprinting.5', 'strength training.5', 'hours alternative.5',  
                 'nr. sessions.6', 'total km.6', 'km Z3-4.6', 'km Z5-T1-T2.6', 'km sprinting.6', 'strength training.6', 'hours alternative.6'] 
-#sort data by athlete ID and Date for chronological order for time-series analysis
-df = df.sort_values(by=['Athlete ID', 'Date'])
 
 #checks for Nans, missing vlaues, and data types;
-#--------   ADD MORE INSPECTION HERE   ------------------------
+# *************** ADD MORE INSPECTION HERE ****************************
 print('not finished with initial data inspection')
-print('number of null values:',df.isnull().sum())
+print('number of null values:',df.isnull().sum()) #null counts per column 
 
-#               --- Preprocessing for Objective Model ---
-print('--- Starting preprocessing for Objective Model ---')
-
-#  Feature Engineering for Objective model 
-# scaling skipped for singular feature
+# -------- OBJECTIVE FEATURE ENGINEERING ----------
+print('--- Objective feature engineering ---')
+# objective training load
 df['objective_training_load'] = df['total km']
 
-# Rolling Metrics for Objective Training Load for ACWR
+# rolling metrics (per athlete)
 df['acute_load_obj'] = df.groupby('Athlete ID')['objective_training_load'].transform(lambda x: x.rolling(window=7, min_periods=1).sum())
 df['chronic_load_obj'] = df.groupby('Athlete ID')['acute_load_obj'].transform(lambda x: x.rolling(window=28, min_periods=1).mean())
-df['objective_acwr'] = df['acute_load_obj'] / df['chronic_load_obj']
+df['objective_acwr'] = df['acute_load_obj'] / (df['chronic_load_obj'] + 1e-9)
 
-# Training Load and Monotony into Objective Strain
 df['weekly_avg_load_obj'] = df.groupby('Athlete ID')['objective_training_load'].transform(lambda x: x.rolling(window=7, min_periods=1).mean())
 df['weekly_std_load_obj'] = df.groupby('Athlete ID')['objective_training_load'].transform(lambda x: x.rolling(window=7, min_periods=1).std())
-df['monotony_obj'] = df['weekly_avg_load_obj'] / df['weekly_std_load_obj']
+# avoid division by zero
+df['monotony_obj'] = df['weekly_avg_load_obj'] / (df['weekly_std_load_obj'].replace(0, np.nan))
 df['objective_strain'] = df['objective_training_load'] * df['monotony_obj']
 
-#Define features to be used for the objective model
-objective_features = ['objective_strain', 
-                'objective_acwr'] + raw_features_objective
+objective_features = ['objective_strain','objective_acwr'] + raw_features_objective
 
-# Handle NaN and infinite values that arise from calculations
-df.replace([np.inf, -np.inf], np.nan, inplace=True) # np.inf = infinity replace with np.nan = 'not a number'
-#counter for imputed data
-# first sum counts true per col, second counts across columns
-imputed_data_objective = df[objective_features].isna().sum().sum()
-df.fillna(0, inplace=True) # all nan become '0'
-
-print('Objective Model Imputations')
-print(f'Total data points imputed (set to 0): {imputed_data_objective}')
-
-# SEPARATE X (features) and Y (target) data arrays
-data_objective_X = df[objective_features].values
-data_objective_y = df['injury'].values # 1D target array
-
-# 4. Create Time-Series Sequences & Split Data 
-
-#create sequences 
-X_objective, y_objective = create_time_series_data(data_objective_X, data_objective_y, TIME_STEPS)
-
-#Split data into training and validation sets
-split_index_obj = int(0.8 * len(X_objective)) #determines split, .8 = 80% train 20% validate
-X_objective_train, X_objective_val = X_objective[:split_index_obj], X_objective[split_index_obj:]
-y_objective_train, y_objective_val = y_objective[:split_index_obj], y_objective[split_index_obj:]
-
-# transform and normalize 
-
-scaler_objective_X = MinMaxScaler() #first create scalar object, to call on class
-
-# b/c x is 3D, need to flatten
-#flatten to 2D
-n_train, t, f = X_objective_train.shape
-X_train_flat = X_objective_train.reshape(-1, f)
-
-# scaling (fit only on train!)
-X_train_flat = scaler_objective_X.fit_transform(X_train_flat)
-X_val_flat   = scaler_objective_X.transform(X_objective_val.reshape(-1, f))
-
-# reshape back
-X_objective_train = X_train_flat.reshape(n_train, t, f)
-X_objective_val   = X_val_flat.reshape(len(X_objective_val), t, f)
-
-#b/c y is label, no need to scale, just use float (0 or 1)
-y_objective_train = y_objective_train.astype(float)
-y_objective_val = y_objective_val.astype(float)
-
-print(f"Objective model data created with shape: X_train={X_objective_train.shape}, y_train={y_objective_train.shape}")
-
-#Save Preprocessed data and scaler for the objective model 
-np.save('preprocessed_data_objective/X_train.npy', X_objective_train)
-np.save('preprocessed_data_objective/X_val.npy', X_objective_val)
-np.save('preprocessed_data_objective/y_train.npy', y_objective_train)
-np.save('preprocessed_data_objective/y_val.npy',y_objective_val)
-with open('preprocessed_data_objective/scaler.pkl', 'wb') as f:
-    pickle.dump(scaler_objective_X, f)
-with open('preprocessed_data_objective/objective_features.pkl', 'wb') as f:
-    pickle.dump(objective_features, f)
-print("Objective data saved successfully")
-
-#           --- Preprocessing for Combined Model ---
-print('\n--- now starting data preprocessing for combined model ---')
-
-# Scaling and Feature Engineering for Combined Model
-
-# Create the combined Training Load Metric
+# -------- COMBINED FEATURE ENGINEERING ----------
+print('--- Combined feature engineering ---')
+# combined training load (use raw per-athlete values; do NOT global-scale here)
 df['combined_training_load'] = df['perceived exertion'] * df['total km']
 
-# Combined ACWR
 df['acute_load_combined'] = df.groupby('Athlete ID')['combined_training_load'].transform(lambda x: x.rolling(window=7, min_periods=1).sum())
 df['chronic_load_combined'] = df.groupby('Athlete ID')['acute_load_combined'].transform(lambda x: x.rolling(window=28, min_periods=1).mean())
-df['combined_acwr'] = df['acute_load_combined'] / df['chronic_load_combined']
+df['combined_acwr'] = df['acute_load_combined'] / (df['chronic_load_combined'] + 1e-9)
 
-
-# Combined Strain
 df['weekly_avg_load_combined'] = df.groupby('Athlete ID')['combined_training_load'].transform(lambda x: x.rolling(window=7, min_periods=1).mean())
-df['weekly_std_load_combined'] = df.groupby('Athlete ID')['combined_training_load'].transform(lambda x : x.rolling(window=7, min_periods=1).std())
-df['combined_monotony'] = df['weekly_avg_load_combined'] / df['weekly_std_load_combined']
+df['weekly_std_load_combined'] = df.groupby('Athlete ID')['combined_training_load'].transform(lambda x: x.rolling(window=7, min_periods=1).std())
+df['combined_monotony'] = df['weekly_avg_load_combined'] / (df['weekly_std_load_combined'].replace(0, np.nan))
 df['combined_strain'] = df['combined_training_load'] * df['combined_monotony']
 
-#features to be used for subjective model
-combined_features = ['combined_monotony', 'combined_strain', 'combined_acwr'] + raw_features_combined
+combined_features = ['combined_monotony','combined_strain','combined_acwr'] + raw_features_combined
 
-# Handle and record NaN and infinities
+# -------- HANDLE INF/NA sensibly ----------
+# Replace inf with NaN then perform per-athlete forward/back fill, then global fallback
 df.replace([np.inf, -np.inf], np.nan, inplace=True)
-#counter for imputed values 
-# first sum is for true per col, second sum for across cols
-imputed_data_combined = df[combined_features].isna().sum().sum()
-df.fillna(0, inplace=True)
 
-print("Combined Model Imputations")
-print(f'Total data points imputed (set to 0):{imputed_data_combined}')
+# forward fill then backward fill per athlete for numeric columns to avoid zeros skewing early windows
+numeric_cols = list(set(objective_features + combined_features))
+numeric_cols = [c for c in numeric_cols if c in df.columns]  # keep only present columns
 
-# SEPARATE X (features) and Y (target) data arrays
-data_combined_X = df[combined_features].values
-data_combined_y = df['injury'].values # 1D target array
+df[numeric_cols] = df.groupby('Athlete ID')[numeric_cols].transform(lambda g: g.ffill().bfill())
 
-# 4. Creating Time-Series Sequences & 5. Splitting Data
-# Scale the combined dataset (note: this is a new scaler, not the one from before)
+# any remaining NaNs (very start of athlete history) fill with column median
+for col in numeric_cols:
+    if df[col].isnull().any():
+        df[col].fillna(df[col].median(), inplace=True)
 
+# report imputation counts (for logging)
+imputed_counts = df[numeric_cols].isnull().sum().sum()  # should be zero now
+print(f"Remaining NaNs after imputation (should be 0): {imputed_counts}")
 
-# Create the sequences using the new function that handles X and y separately
-X_combined, y_combined = create_time_series_data(data_combined_X, data_combined_y, TIME_STEPS)
+# -------- PREPARE OBJECTIVE DATASETS ----------
+print('--- Creating objective sequences and splits ---')
+data_objective_X = df[objective_features].values
+data_objective_y = df['injury'].values.astype(int)
 
-# Split the data into training and validation sets (e.g., 80/20 split)
-split_index_combined = int(0.8 * len(X_combined))
-X_combined_train, X_combined_val = X_combined[:split_index_combined], X_combined[split_index_combined:]
-y_combined_train, y_combined_val = y_combined[:split_index_combined], y_combined[split_index_combined:]
- 
-# scale data here
-scaler_combined_X = MinMaxScaler()
+X_obj_train, X_obj_val, y_obj_train, y_obj_val = per_athlete_train_val_split(
+    df, objective_features, 'injury', TIME_STEPS, train_frac=TRAIN_FRAC
+)
 
-# b/c x is 3D, need to flatten
-#flatten to 2D
-# flatten to 2D
-n_train, t, f = X_combined_train.shape
-X_train_flat = X_combined_train.reshape(-1, f)
-X_val_flat = X_combined_val.reshape(-1, f)
+print("Objective initial shapes (before scaling):")
+print("X_train:", X_obj_train.shape, "X_val:", X_obj_val.shape, "y_train:", y_obj_train.shape, "y_val:", y_obj_val.shape)
 
-# scaling (fit only on train!)
-X_train_flat = scaler_combined_X.fit_transform(X_train_flat)
-X_val_flat   = scaler_combined_X.transform(X_val_flat)
+# scale 3D arrays (fit on train_flat only)
+X_obj_train_s, X_obj_val_s, scaler_obj = scale_3d_train_val(X_obj_train, X_obj_val)
 
-# reshape back
-X_combined_train = X_train_flat.reshape(n_train, t, f)
-X_combined_val   = X_val_flat.reshape(len(X_combined_val), t, f)
+# Save objective outputs
+np.save('preprocessed_data_objective/X_train.npy', X_obj_train_s)
+np.save('preprocessed_data_objective/X_val.npy', X_obj_val_s)
+np.save('preprocessed_data_objective/y_train.npy', y_obj_train.astype(int))
+np.save('preprocessed_data_objective/y_val.npy', y_obj_val.astype(int))
 
-#b/c y is label, no need to scale, just use float (0 or 1)
-y_combined_train = y_combined_train.astype(float)
-y_combined_val = y_combined_val.astype(float)
+with open('preprocessed_data_objective/scaler.pkl', 'wb') as f:
+    pickle.dump(scaler_obj, f)
+with open('preprocessed_data_objective/objective_features.pkl', 'wb') as f:
+    pickle.dump(objective_features, f)
 
-print(f"Combined model data created with shapes: X_train={X_combined_train.shape}, y_train={y_combined_train.shape}")
+print("Objective data saved. Train sequences:", X_obj_train_s.shape[0], "Val sequences:", X_obj_val_s.shape[0])
 
-# Save preprocessed data and scaler for the combined model
-np.save('preprocessed_data_combined/X_train.npy', X_combined_train)
-np.save('preprocessed_data_combined/X_val.npy', X_combined_val)
-np.save('preprocessed_data_combined/y_train.npy', y_combined_train)
-np.save('preprocessed_data_combined/y_val.npy', y_combined_val)
+# -------- PREPARE COMBINED DATASETS ----------
+print('--- Creating combined sequences and splits ---')
+X_comb_train, X_comb_val, y_comb_train, y_comb_val = per_athlete_train_val_split(
+    df, combined_features, 'injury', TIME_STEPS, train_frac=TRAIN_FRAC
+)
+
+print("Combined initial shapes (before scaling):")
+print("X_train:", X_comb_train.shape, "X_val:", X_comb_val.shape, "y_train:", y_comb_train.shape, "y_val:", y_comb_val.shape)
+
+X_comb_train_s, X_comb_val_s, scaler_comb = scale_3d_train_val(X_comb_train, X_comb_val)
+
+# Save combined outputs
+np.save('preprocessed_data_combined/X_train.npy', X_comb_train_s)
+np.save('preprocessed_data_combined/X_val.npy', X_comb_val_s)
+np.save('preprocessed_data_combined/y_train.npy', y_comb_train.astype(int))
+np.save('preprocessed_data_combined/y_val.npy', y_comb_val.astype(int))
+
 with open('preprocessed_data_combined/scaler.pkl', 'wb') as f:
-    pickle.dump(scaler_combined_X, f)
+    pickle.dump(scaler_comb, f)
 with open('preprocessed_data_combined/combined_features.pkl', 'wb') as f:
     pickle.dump(combined_features, f)
-print("Combined data saved successfully.")
+
+print("Combined data saved. Train sequences:", X_comb_train_s.shape[0], "Val sequences:", X_comb_val_s.shape[0])
+
+print("Preprocessing finished.")
