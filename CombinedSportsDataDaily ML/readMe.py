@@ -21,10 +21,14 @@ close environment
    deactivate
 
 ----------------------    install libraries    -----------------------
-            run this in terminal for (3) libraries
-                pip install pandas scikit-learn altair 
-            (5) more libraries   
-                pip install matplotlib seaborn tabulate torch tqdm
+            1) run environment 
+                venv/scripts/activate
+
+            2) install library with environment running
+                pip install <library name>
+
+            3) update requirements.txt to match
+                pip freeze > requirements.txt
 
 ----------------------- save libraries -------------------------------
 
