@@ -8,10 +8,16 @@ import os
 from sklearn.preprocessing import StandardScaler
 import pickle
 
+import pandas as pd
+import numpy as np
+import os
+from sklearn.preprocessing import StandardScaler
+import pickle
+
 class DTBaggingDataPreprocessor:
-     
     """
     Preprocessing script for Decision Tree and Bagging injury prediction models
+    Configured for timeseries (daily).csv dataset
     Saves processed data to preprocessing_dtbagging folder
     """
     
@@ -53,15 +59,20 @@ class DTBaggingDataPreprocessor:
         print("=" * 60)
         print(f"Original dataset shape: {df.shape}")
         
+        # Drop columns we don't want to use as features
+        columns_to_drop = ['Athlete ID', 'Date', target_col]
+        existing_cols_to_drop = [col for col in columns_to_drop if col in df.columns]
+        
         # Separate features and target
         if target_col not in df.columns:
             raise ValueError(f"Target column '{target_col}' not found in dataset")
         
-        X = df.drop(columns=[target_col])
+        X = df.drop(columns=existing_cols_to_drop)
         y = df[target_col]
         
         # Store feature names
         self.feature_names = X.columns.tolist()
+        print(f"\nNumber of features: {len(self.feature_names)}")
         
         # Handle missing values
         X = X.fillna(X.median())
@@ -73,10 +84,10 @@ class DTBaggingDataPreprocessor:
         print(f"\nClass Distribution:")
         print(f"  Injury cases: {len(injury_cases)}")
         print(f"  Non-injury cases: {len(non_injury_cases)}")
-        print(f"  Imbalance ratio: 1:{len(non_injury_cases)/len(injury_cases):.1f}")
+        print(f"  Imbalance ratio: 1:{len(non_injury_cases)/max(len(injury_cases), 1):.1f}")
         
         # Augment minority class (injury cases)
-        # Paper methodology: adds 575 instances per augmentation round
+        # Paper methodology: adds instances per augmentation round
         print(f"\nAugmenting minority class {augmentation_factor}x...")
         augmented_injury = injury_cases.copy()
         
@@ -111,7 +122,7 @@ class DTBaggingDataPreprocessor:
         print(f"  Balance ratio: 1:1")
         
         # Split features and target
-        X_balanced = balanced_df.drop(columns=[target_col])
+        X_balanced = balanced_df.drop(columns=existing_cols_to_drop)
         y_balanced = balanced_df[target_col]
         
         # Standardize features
@@ -125,17 +136,6 @@ class DTBaggingDataPreprocessor:
         """
         Save preprocessed data and scaler to files
         Splits data into train/test sets (no validation needed for DT/Bagging)
-        
-        Parameters:
-        -----------
-        X : DataFrame
-            Preprocessed features
-        y : Series
-            Target variable
-        train_size : float
-            Proportion of data for training (default 0.8)
-        val_size : float
-            Not used for DT/Bagging (kept for consistency)
         """
         from sklearn.model_selection import train_test_split
         
@@ -179,7 +179,7 @@ class DTBaggingDataPreprocessor:
             'train_samples': len(X_train),
             'test_samples': len(X_test),
             'augmentation_factor': 5,
-            'feature_names': ', '.join(self.feature_names)
+            'feature_names': ', '.join(self.feature_names[:10]) + '...'
         }
         
         pd.DataFrame([info]).to_csv(f'{self.output_dir}/preprocessing_info.csv', index=False)
@@ -198,37 +198,19 @@ class DTBaggingDataPreprocessor:
         return X_train, X_test, y_train, y_test
 
 
-# Example usage
+# Main execution
 if __name__ == "__main__":
-    # Create synthetic dataset for demonstration
-    np.random.seed(42)
-    n_samples = 1000
+    print("=" * 60)
+    print("Decision Tree/Bagging Preprocessing for Runner Injury Prediction")
+    print("=" * 60)
     
-    print("Creating synthetic runner dataset...")
-    features = {
-        'total_sessions': np.random.randint(3, 8, n_samples),
-        'rest_days': np.random.randint(0, 3, n_samples),
-        'total_distance': np.random.uniform(30, 120, n_samples),
-        'max_distance': np.random.uniform(10, 30, n_samples),
-        'total_km_z3_z5': np.random.uniform(5, 40, n_samples),
-        'tough_sessions': np.random.randint(0, 4, n_samples),
-        'interval_session_days': np.random.randint(1, 5, n_samples),
-        'total_km_z3_z4': np.random.uniform(5, 30, n_samples),
-        'max_z3_z4_distance': np.random.uniform(5, 20, n_samples),
-        'total_km_z5_t1_t2': np.random.uniform(0, 15, n_samples),
-        'cross_training_hours': np.random.uniform(0, 5, n_samples),
-        'strength_sessions': np.random.randint(0, 3, n_samples),
-        'avg_exertion': np.random.uniform(5, 9, n_samples),
-        'min_exertion': np.random.uniform(3, 7, n_samples),
-        'max_exertion': np.random.uniform(7, 10, n_samples),
-        'avg_training_success': np.random.uniform(5, 9, n_samples),
-        'avg_recovery': np.random.uniform(4, 9, n_samples),
-        'min_recovery': np.random.uniform(2, 6, n_samples),
-        'max_recovery': np.random.uniform(7, 10, n_samples),
-        'injury': np.random.choice([0, 1], n_samples, p=[0.95, 0.05])
-    }
+    # Load your actual dataset
+    print("\nLoading timeseries (daily).csv...")
+    df = pd.read_csv('timeseries (daily).csv')
     
-    df = pd.DataFrame(features)
+    print(f"✓ Loaded dataset with {len(df)} rows and {len(df.columns)} columns")
+    print(f"\nFirst few column names: {df.columns.tolist()[:10]}")
+    print(f"Target column 'injury' found: {'injury' in df.columns}")
     
     # Initialize preprocessor
     preprocessor = DTBaggingDataPreprocessor(output_dir='preprocessing_dtbagging')
@@ -244,6 +226,3 @@ if __name__ == "__main__":
     print("=" * 60)
     print(f"\nYou can now run the Decision Tree/Bagging model training scripts.")
     print(f"All data is saved in: preprocessing_dtbagging/")
-    
-    # To use with your own data, replace the synthetic data with:
-    # df = pd.read_csv('your_runner_data.csv')
