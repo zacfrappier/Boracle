@@ -3,3 +3,5 @@
 /preprocssing_data_combine
 /preprocssing_data_objective
 /preprocessed_data
+/preprocessing_dtbagging
+/preprocessing_xgboost

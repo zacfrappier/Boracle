@@ -2,339 +2,248 @@
 dt with bagging model from authors: 
 Kayal Padmanandam, Talari Akhila, Aesuri Divya Sri, Kalekera Sunidhi, Bolle Amulya 
 '''
-
-
 import pandas as pd
 import numpy as np
-import pickle
 import os
-from sklearn.ensemble import BaggingClassifier
-from sklearn.tree import DecisionTreeClassifier
-from sklearn.metrics import accuracy_score, precision_score, f1_score, confusion_matrix
-import matplotlib.pyplot as plt
-import seaborn as sns
+from sklearn.preprocessing import StandardScaler
+import pickle
 
-class DTBaggingInjuryModel:
+class DTBaggingDataPreprocessor:
+     
     """
-    Decision Tree and Bagging models for athletic runner injury prediction
-    Loads preprocessed data from preprocessing_dtbagging folder
-    
-    Paper Results (5x augmentation, 2875x2875):
-    - Bagging: 94% accuracy, 91% precision, 95% F1
-    - Decision Tree: 92% accuracy, 86% precision, 92% F1
+    Preprocessing script for Decision Tree and Bagging injury prediction models
+    Saves processed data to preprocessing_dtbagging folder
     """
     
-    def __init__(self, model_type='bagging', data_dir='preprocessing_dtbagging'):
-        """
-        Parameters:
-        -----------
-        model_type : str
-            'bagging' or 'dt' (decision tree)
-        data_dir : str
-            Directory containing preprocessed data
-        """
-        if model_type not in ['bagging', 'dt']:
-            raise ValueError("model_type must be 'bagging' or 'dt'")
-        
-        self.model_type = model_type
-        self.data_dir = data_dir
-        self.model = None
-        self.scaler = None
+    def __init__(self, output_dir='preprocessing_dtbagging'):
+        self.output_dir = output_dir
+        self.scaler = StandardScaler()
         self.feature_names = None
         
-    def load_preprocessed_data(self):
-        """
-        Load preprocessed data from the preprocessing folder
-        """
-        print("=" * 60)
-        print("Loading Preprocessed Data")
-        print("=" * 60)
-        
-        # Check if directory exists
-        if not os.path.exists(self.data_dir):
-            raise FileNotFoundError(
-                f"Directory '{self.data_dir}' not found. "
-                "Please run the preprocessing script first."
-            )
-        
-        # Load datasets
-        print(f"Loading from {self.data_dir}/...")
-        
-        X_train = pd.read_csv(f'{self.data_dir}/X_train.csv')
-        X_test = pd.read_csv(f'{self.data_dir}/X_test.csv')
-        
-        y_train = pd.read_csv(f'{self.data_dir}/y_train.csv').squeeze()
-        y_test = pd.read_csv(f'{self.data_dir}/y_test.csv').squeeze()
-        
-        # Load scaler
-        with open(f'{self.data_dir}/scaler.pkl', 'rb') as f:
-            self.scaler = pickle.load(f)
-        
-        # Load feature names
-        with open(f'{self.data_dir}/feature_names.txt', 'r') as f:
-            self.feature_names = [line.strip() for line in f.readlines()]
-        
-        print(f"\n✓ Data loaded successfully!")
-        print(f"  Training set: {X_train.shape}")
-        print(f"  Test set: {X_test.shape}")
-        print(f"  Features: {len(self.feature_names)}")
-        
-        return X_train, X_test, y_train, y_test
+        # Create output directory if it doesn't exist
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
+            print(f"Created directory: {output_dir}")
     
-    def train(self, X_train, y_train):
+    def preprocess_data(self, df, target_col='injury', augmentation_factor=5):
         """
-        Train Decision Tree or Bagging model
-        """
-        print("\n" + "=" * 60)
-        print(f"Training {self.model_type.upper()} Model")
-        print("=" * 60)
-        
-        if self.model_type == 'bagging':
-            # Bagging Classifier with Decision Tree as base estimator
-            print("\nModel: Bagging Classifier")
-            print("Base Estimator: Decision Tree")
-            
-            base_estimator = DecisionTreeClassifier(
-                max_depth=10,
-                min_samples_split=5,
-                min_samples_leaf=2,
-                random_state=42
-            )
-            
-            self.model = BaggingClassifier(
-                estimator=base_estimator,
-                n_estimators=50,
-                max_samples=0.8,
-                max_features=0.8,
-                bootstrap=True,
-                random_state=42,
-                n_jobs=-1
-            )
-            
-            print("\nBagging Parameters:")
-            print("  n_estimators: 50")
-            print("  max_samples: 0.8")
-            print("  max_features: 0.8")
-            print("  bootstrap: True")
-            
-            print("\nBase Decision Tree Parameters:")
-            print("  max_depth: 10")
-            print("  min_samples_split: 5")
-            print("  min_samples_leaf: 2")
-            
-        elif self.model_type == 'dt':
-            # Standalone Decision Tree
-            print("\nModel: Decision Tree Classifier")
-            
-            self.model = DecisionTreeClassifier(
-                max_depth=15,
-                min_samples_split=5,
-                min_samples_leaf=2,
-                criterion='gini',
-                random_state=42
-            )
-            
-            print("\nDecision Tree Parameters:")
-            print("  max_depth: 15")
-            print("  min_samples_split: 5")
-            print("  min_samples_leaf: 2")
-            print("  criterion: gini")
-        
-        # Train model
-        print(f"\nTraining...")
-        self.model.fit(X_train, y_train)
-        
-        print("✓ Training complete!")
-        
-    def evaluate(self, X_test, y_test, show_plots=True):
-        """
-        Evaluate model performance on test set
-        """
-        print("\n" + "=" * 60)
-        print("Model Evaluation")
-        print("=" * 60)
-        
-        # Make predictions
-        y_pred = self.model.predict(X_test)
-        
-        # Calculate metrics
-        accuracy = accuracy_score(y_test, y_pred)
-        precision = precision_score(y_test, y_pred, zero_division=0)
-        f1 = f1_score(y_test, y_pred, zero_division=0)
-        cm = confusion_matrix(y_test, y_pred)
-        
-        print(f"\n=== {self.model_type.upper()} Performance ===")
-        print(f"Accuracy:  {accuracy:.4f} ({accuracy*100:.2f}%)")
-        print(f"Precision: {precision:.4f} ({precision*100:.2f}%)")
-        print(f"F1 Score:  {f1:.4f} ({f1*100:.2f}%)")
-        
-        print("\nConfusion Matrix:")
-        print(f"  True Negatives:  {cm[0][0]}")
-        print(f"  False Positives: {cm[0][1]}")
-        print(f"  False Negatives: {cm[1][0]}")
-        print(f"  True Positives:  {cm[1][1]}")
-        
-        if self.model_type == 'bagging':
-            print("\nPaper's Bagging Results (5x augmentation, 2875x2875):")
-            print("  Accuracy: 0.94, Precision: 0.91, F1: 0.95")
-        else:
-            print("\nPaper's Decision Tree Results (5x augmentation, 2875x2875):")
-            print("  Accuracy: 0.92, Precision: 0.86, F1: 0.92")
-        
-        if show_plots:
-            self._plot_results(cm)
-        
-        return {
-            'accuracy': accuracy,
-            'precision': precision,
-            'f1_score': f1,
-            'confusion_matrix': cm
-        }
-    
-    def _plot_results(self, cm):
-        """
-        Plot confusion matrix and feature importance
-        """
-        if self.model_type == 'dt':
-            # For Decision Tree, show both confusion matrix and feature importance
-            fig, axes = plt.subplots(1, 2, figsize=(15, 5))
-            
-            # Confusion Matrix
-            sns.heatmap(cm, annot=True, fmt='d', cmap='Oranges', ax=axes[0])
-            axes[0].set_title(f'{self.model_type.upper()} Confusion Matrix')
-            axes[0].set_ylabel('True Label')
-            axes[0].set_xlabel('Predicted Label')
-            
-            # Feature Importance
-            importances = self.model.feature_importances_
-            indices = np.argsort(importances)[-10:]  # Top 10 features
-            
-            axes[1].barh(range(len(indices)), importances[indices])
-            axes[1].set_yticks(range(len(indices)))
-            axes[1].set_yticklabels([self.feature_names[i] for i in indices])
-            axes[1].set_xlabel('Feature Importance')
-            axes[1].set_title('Top 10 Most Important Features')
-            
-        else:
-            # For Bagging, just show confusion matrix
-            fig, ax = plt.subplots(1, 1, figsize=(8, 6))
-            
-            sns.heatmap(cm, annot=True, fmt='d', cmap='Greens', ax=ax)
-            ax.set_title(f'{self.model_type.upper()} Confusion Matrix')
-            ax.set_ylabel('True Label')
-            ax.set_xlabel('Predicted Label')
-        
-        plt.tight_layout()
-        plt.savefig(f'{self.data_dir}/{self.model_type}_results.png', dpi=300, bbox_inches='tight')
-        print(f"\n✓ Results plot saved to: {self.data_dir}/{self.model_type}_results.png")
-        plt.show()
-    
-    def get_feature_importance(self):
-        """
-        Get feature importance (Decision Tree only)
-        """
-        if self.model_type == 'dt' and self.model is not None:
-            importances = self.model.feature_importances_
-            feature_importance_df = pd.DataFrame({
-                'feature': self.feature_names,
-                'importance': importances
-            }).sort_values('importance', ascending=False)
-            
-            print("\n" + "=" * 60)
-            print("Feature Importance Analysis")
-            print("=" * 60)
-            print("\nTop 10 Most Important Features:")
-            print(feature_importance_df.head(10).to_string(index=False))
-            
-            return feature_importance_df
-        else:
-            print("\nFeature importance only available for Decision Tree model")
-            return None
-    
-    def save_model(self, filename=None):
-        """
-        Save trained model to file
-        """
-        if filename is None:
-            filename = f'{self.model_type}_injury_model.pkl'
-        
-        filepath = f'{self.data_dir}/{filename}'
-        with open(filepath, 'wb') as f:
-            pickle.dump(self.model, f)
-        print(f"\n✓ Model saved to: {filepath}")
-    
-    def predict_new_data(self, new_data):
-        """
-        Make predictions on new runner data
+        Preprocess the runner dataset following the paper's methodology
         
         Parameters:
         -----------
-        new_data : DataFrame
-            New runner metrics (must have same features as training data)
+        df : DataFrame
+            Raw dataset with weekly runner metrics
+        target_col : str
+            Name of the target column (injury/non-injury)
+        augmentation_factor : int
+            Number of times to augment minority class (1-5)
+            Paper showed best results with 5x augmentation:
+            - Bagging: 94% accuracy, 91% precision, 95% F1
+            - Decision Tree: 92% accuracy, 86% precision, 92% F1
         
         Returns:
         --------
-        predictions : array
-            Injury predictions (0=no injury, 1=injury)
-        probabilities : array
-            Prediction probabilities
+        X_scaled : DataFrame
+            Preprocessed and scaled features
+        y_balanced : Series
+            Balanced target variable
         """
-        if self.model is None:
-            raise ValueError("Model not trained yet!")
+        print("=" * 60)
+        print("Decision Tree/Bagging Data Preprocessing")
+        print("=" * 60)
+        print(f"Original dataset shape: {df.shape}")
         
-        # Scale new data
-        new_data_scaled = self.scaler.transform(new_data)
+        # Separate features and target
+        if target_col not in df.columns:
+            raise ValueError(f"Target column '{target_col}' not found in dataset")
         
-        # Make predictions
-        predictions = self.model.predict(new_data_scaled)
-        probabilities = self.model.predict_proba(new_data_scaled)
+        X = df.drop(columns=[target_col])
+        y = df[target_col]
         
-        return predictions, probabilities
-
-
-# Main execution
-if __name__ == "__main__":
-    print("=" * 60)
-    print("Decision Tree/Bagging Injury Prediction Models")
-    print("Based on: Athletic Runner Injury Prediction System (2024)")
-    print("=" * 60)
-    
-    # Train both models
-    for model_type in ['bagging', 'dt']:
-        print(f"\n{'#' * 60}")
-        print(f"# Training {model_type.upper()} Model")
-        print(f"{'#' * 60}\n")
+        # Store feature names
+        self.feature_names = X.columns.tolist()
         
-        # Initialize model
-        model = DTBaggingInjuryModel(
-            model_type=model_type, 
-            data_dir='preprocessing_dtbagging'
+        # Handle missing values
+        X = X.fillna(X.median())
+        
+        # Identify minority and majority classes
+        injury_cases = df[df[target_col] == 1]
+        non_injury_cases = df[df[target_col] == 0]
+        
+        print(f"\nClass Distribution:")
+        print(f"  Injury cases: {len(injury_cases)}")
+        print(f"  Non-injury cases: {len(non_injury_cases)}")
+        print(f"  Imbalance ratio: 1:{len(non_injury_cases)/len(injury_cases):.1f}")
+        
+        # Augment minority class (injury cases)
+        # Paper methodology: adds 575 instances per augmentation round
+        print(f"\nAugmenting minority class {augmentation_factor}x...")
+        augmented_injury = injury_cases.copy()
+        
+        for i in range(augmentation_factor - 1):
+            # Create synthetic samples with small variations
+            noise_factor = 0.05
+            synthetic = injury_cases.copy()
+            
+            # Add small random noise to numerical columns
+            for col in X.columns:
+                if synthetic[col].dtype in ['float64', 'int64']:
+                    noise = np.random.normal(0, noise_factor * synthetic[col].std(), len(synthetic))
+                    synthetic[col] = synthetic[col] + noise
+            
+            augmented_injury = pd.concat([augmented_injury, synthetic], ignore_index=True)
+        
+        # Downsample majority class to match augmented minority
+        target_size = len(augmented_injury)
+        downsampled_non_injury = non_injury_cases.sample(
+            n=min(target_size, len(non_injury_cases)), 
+            random_state=42
         )
         
-        # Load preprocessed data
-        X_train, X_test, y_train, y_test = model.load_preprocessed_data()
+        # Combine balanced dataset
+        balanced_df = pd.concat([augmented_injury, downsampled_non_injury], ignore_index=True)
+        balanced_df = balanced_df.sample(frac=1, random_state=42).reset_index(drop=True)
         
-        # Train model
-        model.train(X_train, y_train)
+        print(f"\nBalanced Dataset:")
+        print(f"  Total samples: {balanced_df.shape[0]}")
+        print(f"  Injury cases: {len(augmented_injury)}")
+        print(f"  Non-injury cases: {len(downsampled_non_injury)}")
+        print(f"  Balance ratio: 1:1")
         
-        # Evaluate model
-        results = model.evaluate(X_test, y_test, show_plots=True)
+        # Split features and target
+        X_balanced = balanced_df.drop(columns=[target_col])
+        y_balanced = balanced_df[target_col]
         
-        # Get feature importance (Decision Tree only)
-        if model_type == 'dt':
-            feature_importance = model.get_feature_importance()
+        # Standardize features
+        print("\nScaling features...")
+        X_scaled = self.scaler.fit_transform(X_balanced)
+        X_scaled = pd.DataFrame(X_scaled, columns=self.feature_names)
         
-        # Save model
-        model.save_model()
+        return X_scaled, y_balanced
+    
+    def save_processed_data(self, X, y, train_size=0.8, val_size=0.0):
+        """
+        Save preprocessed data and scaler to files
+        Splits data into train/test sets (no validation needed for DT/Bagging)
         
-        print(f"\n{'=' * 60}")
-        print(f"{model_type.upper()} Model Training Complete!")
-        print(f"{'=' * 60}")
+        Parameters:
+        -----------
+        X : DataFrame
+            Preprocessed features
+        y : Series
+            Target variable
+        train_size : float
+            Proportion of data for training (default 0.8)
+        val_size : float
+            Not used for DT/Bagging (kept for consistency)
+        """
+        from sklearn.model_selection import train_test_split
+        
+        print("\n" + "=" * 60)
+        print("Saving Processed Data")
+        print("=" * 60)
+        
+        # Calculate test size
+        test_size = 1 - train_size
+        
+        # Split into train and test
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=test_size, random_state=42, stratify=y
+        )
+        
+        print(f"\nData Split:")
+        print(f"  Training set: {X_train.shape[0]} samples ({train_size:.0%})")
+        print(f"  Test set: {X_test.shape[0]} samples ({test_size:.0%})")
+        
+        # Save datasets
+        print(f"\nSaving to {self.output_dir}/...")
+        
+        X_train.to_csv(f'{self.output_dir}/X_train.csv', index=False)
+        X_test.to_csv(f'{self.output_dir}/X_test.csv', index=False)
+        
+        y_train.to_csv(f'{self.output_dir}/y_train.csv', index=False, header=True)
+        y_test.to_csv(f'{self.output_dir}/y_test.csv', index=False, header=True)
+        
+        # Save scaler for future use
+        with open(f'{self.output_dir}/scaler.pkl', 'wb') as f:
+            pickle.dump(self.scaler, f)
+        
+        # Save feature names
+        with open(f'{self.output_dir}/feature_names.txt', 'w') as f:
+            f.write('\n'.join(self.feature_names))
+        
+        # Save preprocessing info
+        info = {
+            'total_samples': len(X),
+            'n_features': len(self.feature_names),
+            'train_samples': len(X_train),
+            'test_samples': len(X_test),
+            'augmentation_factor': 5,
+            'feature_names': ', '.join(self.feature_names)
+        }
+        
+        pd.DataFrame([info]).to_csv(f'{self.output_dir}/preprocessing_info.csv', index=False)
+        
+        print(f"\n✓ Saved files:")
+        print(f"  - X_train.csv, X_test.csv")
+        print(f"  - y_train.csv, y_test.csv")
+        print(f"  - scaler.pkl")
+        print(f"  - feature_names.txt")
+        print(f"  - preprocessing_info.csv")
+        
+        print("\nExpected Performance (from paper with 5x augmentation):")
+        print("  Bagging:       Accuracy=0.94, Precision=0.91, F1=0.95")
+        print("  Decision Tree: Accuracy=0.92, Precision=0.86, F1=0.92")
+        
+        return X_train, X_test, y_train, y_test
+
+
+# Example usage
+if __name__ == "__main__":
+    # Create synthetic dataset for demonstration
+    np.random.seed(42)
+    n_samples = 1000
+    
+    print("Creating synthetic runner dataset...")
+    features = {
+        'total_sessions': np.random.randint(3, 8, n_samples),
+        'rest_days': np.random.randint(0, 3, n_samples),
+        'total_distance': np.random.uniform(30, 120, n_samples),
+        'max_distance': np.random.uniform(10, 30, n_samples),
+        'total_km_z3_z5': np.random.uniform(5, 40, n_samples),
+        'tough_sessions': np.random.randint(0, 4, n_samples),
+        'interval_session_days': np.random.randint(1, 5, n_samples),
+        'total_km_z3_z4': np.random.uniform(5, 30, n_samples),
+        'max_z3_z4_distance': np.random.uniform(5, 20, n_samples),
+        'total_km_z5_t1_t2': np.random.uniform(0, 15, n_samples),
+        'cross_training_hours': np.random.uniform(0, 5, n_samples),
+        'strength_sessions': np.random.randint(0, 3, n_samples),
+        'avg_exertion': np.random.uniform(5, 9, n_samples),
+        'min_exertion': np.random.uniform(3, 7, n_samples),
+        'max_exertion': np.random.uniform(7, 10, n_samples),
+        'avg_training_success': np.random.uniform(5, 9, n_samples),
+        'avg_recovery': np.random.uniform(4, 9, n_samples),
+        'min_recovery': np.random.uniform(2, 6, n_samples),
+        'max_recovery': np.random.uniform(7, 10, n_samples),
+        'injury': np.random.choice([0, 1], n_samples, p=[0.95, 0.05])
+    }
+    
+    df = pd.DataFrame(features)
+    
+    # Initialize preprocessor
+    preprocessor = DTBaggingDataPreprocessor(output_dir='preprocessing_dtbagging')
+    
+    # Preprocess data (5x augmentation for best results per paper)
+    X, y = preprocessor.preprocess_data(df, target_col='injury', augmentation_factor=5)
+    
+    # Save processed data
+    X_train, X_test, y_train, y_test = preprocessor.save_processed_data(X, y)
     
     print("\n" + "=" * 60)
-    print("All Models Trained Successfully!")
+    print("Preprocessing Complete!")
     print("=" * 60)
-    print("\nBest Performing Model (from paper): Bagging")
-    print("  Accuracy: 0.94, Precision: 0.91, F1: 0.95")
-    print("\nTo make predictions on new data:")
-    print("  predictions, probs = model.predict_new_data(new_runner_data)")
+    print(f"\nYou can now run the Decision Tree/Bagging model training scripts.")
+    print(f"All data is saved in: preprocessing_dtbagging/")
+    
+    # To use with your own data, replace the synthetic data with:
+    # df = pd.read_csv('your_runner_data.csv')
