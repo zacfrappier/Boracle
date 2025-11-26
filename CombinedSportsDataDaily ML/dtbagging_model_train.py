@@ -16,6 +16,7 @@ class DTBaggingInjuryModel:
     """
     Decision Tree and Bagging models for athletic runner injury prediction
     Loads preprocessed data from preprocessing_dtbagging folder
+    Works with V2 preprocessing scripts for timeseries (daily).csv
     
     Paper Results (5x augmentation, 2875x2875):
     - Bagging: 94% accuracy, 91% precision, 95% F1
@@ -52,7 +53,7 @@ class DTBaggingInjuryModel:
         if not os.path.exists(self.data_dir):
             raise FileNotFoundError(
                 f"Directory '{self.data_dir}' not found. "
-                "Please run the preprocessing script first."
+                "Please run the DT/Bagging preprocessing script (V2) first."
             )
         
         # Load datasets
@@ -207,9 +208,12 @@ class DTBaggingInjuryModel:
             importances = self.model.feature_importances_
             indices = np.argsort(importances)[-10:]  # Top 10 features
             
+            # Get feature names for top features
+            top_feature_names = [self.feature_names[i] for i in indices]
+            
             axes[1].barh(range(len(indices)), importances[indices])
             axes[1].set_yticks(range(len(indices)))
-            axes[1].set_yticklabels([self.feature_names[i] for i in indices])
+            axes[1].set_yticklabels(top_feature_names)
             axes[1].set_xlabel('Feature Importance')
             axes[1].set_title('Top 10 Most Important Features')
             
@@ -293,7 +297,8 @@ class DTBaggingInjuryModel:
 # Main execution
 if __name__ == "__main__":
     print("=" * 60)
-    print("Decision Tree/Bagging Injury Prediction Models")
+    print("Decision Tree/Bagging Injury Prediction Models V2")
+    print("For timeseries (daily).csv dataset")
     print("Based on: Athletic Runner Injury Prediction System (2024)")
     print("=" * 60)
     
@@ -303,31 +308,42 @@ if __name__ == "__main__":
         print(f"# Training {model_type.upper()} Model")
         print(f"{'#' * 60}\n")
         
-        # Initialize model
-        model = DTBaggingInjuryModel(
-            model_type=model_type, 
-            data_dir='preprocessing_dtbagging'
-        )
-        
-        # Load preprocessed data
-        X_train, X_test, y_train, y_test = model.load_preprocessed_data()
-        
-        # Train model
-        model.train(X_train, y_train)
-        
-        # Evaluate model
-        results = model.evaluate(X_test, y_test, show_plots=True)
-        
-        # Get feature importance (Decision Tree only)
-        if model_type == 'dt':
-            feature_importance = model.get_feature_importance()
-        
-        # Save model
-        model.save_model()
-        
-        print(f"\n{'=' * 60}")
-        print(f"{model_type.upper()} Model Training Complete!")
-        print(f"{'=' * 60}")
+        try:
+            # Initialize model
+            model = DTBaggingInjuryModel(
+                model_type=model_type, 
+                data_dir='preprocessing_dtbagging'
+            )
+            
+            # Load preprocessed data
+            X_train, X_test, y_train, y_test = model.load_preprocessed_data()
+            
+            # Train model
+            model.train(X_train, y_train)
+            
+            # Evaluate model
+            results = model.evaluate(X_test, y_test, show_plots=True)
+            
+            # Get feature importance (Decision Tree only)
+            if model_type == 'dt':
+                feature_importance = model.get_feature_importance()
+            
+            # Save model
+            model.save_model()
+            
+            print(f"\n{'=' * 60}")
+            print(f"{model_type.upper()} Model Training Complete!")
+            print(f"{'=' * 60}")
+            print(f"\nModel Performance Summary:")
+            print(f"  Accuracy:  {results['accuracy']:.2%}")
+            print(f"  Precision: {results['precision']:.2%}")
+            print(f"  F1 Score:  {results['f1_score']:.2%}")
+            
+        except FileNotFoundError as e:
+            print(f"\n❌ Error: {e}")
+            print("\nPlease run the DT/Bagging preprocessing script (V2) first:")
+            print("  python dtbagging_preprocessing_v2.py")
+            break
     
     print("\n" + "=" * 60)
     print("All Models Trained Successfully!")
