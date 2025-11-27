@@ -8,7 +8,12 @@ import pickle
 import os
 from sklearn.ensemble import BaggingClassifier
 from sklearn.tree import DecisionTreeClassifier
-from sklearn.metrics import accuracy_score, precision_score, f1_score, confusion_matrix
+from sklearn.metrics import (
+    accuracy_score, precision_score, 
+    f1_score, confusion_matrix,
+    classification_report, 
+    roc_auc_score
+)
 import matplotlib.pyplot as plt
 import seaborn as sns
 
@@ -153,25 +158,39 @@ class DTBaggingInjuryModel:
         print("Model Evaluation")
         print("=" * 60)
         
-        # Make predictions
+        # Predictions
         y_pred = self.model.predict(X_test)
+        # Probabilities for positive class (injury = 1)
+        y_proba = self.model.predict_proba(X_test)[:, 1]
         
-        # Calculate metrics
+        # Metrics
+        f1 = f1_score(y_test, y_pred, average='binary', zero_division=0)
+        f1_macro = f1_score(y_test, y_pred, average='macro', zero_division=0)
         accuracy = accuracy_score(y_test, y_pred)
         precision = precision_score(y_test, y_pred, zero_division=0)
-        f1 = f1_score(y_test, y_pred, zero_division=0)
+        auc_roc = roc_auc_score(y_test, y_proba)
         cm = confusion_matrix(y_test, y_pred)
         
         print(f"\n=== {self.model_type.upper()} Performance ===")
-        print(f"Accuracy:  {accuracy:.4f} ({accuracy*100:.2f}%)")
-        print(f"Precision: {precision:.4f} ({precision*100:.2f}%)")
-        print(f"F1 Score:  {f1:.4f} ({f1*100:.2f}%)")
+        print(f"F1 Score (injury class):  {f1:.4f} ({f1*100:.2f}%)")
+        print(f"F1 Score (macro avg):     {f1_macro:.4f} ({f1_macro*100:.2f}%)")
+        print(f"AUC-ROC (injury class):   {auc_roc:.4f} ({auc_roc*100:.2f}%)")
+        print(f"Accuracy:                 {accuracy:.4f} ({accuracy*100:.2f}%)")
+        print(f"Precision (injury class): {precision:.4f} ({precision*100:.2f}%)")
         
         print("\nConfusion Matrix:")
         print(f"  True Negatives:  {cm[0][0]}")
         print(f"  False Positives: {cm[0][1]}")
         print(f"  False Negatives: {cm[1][0]}")
         print(f"  True Positives:  {cm[1][1]}")
+        
+        print("\nDetailed classification report:")
+        print(classification_report(
+            y_test,
+            y_pred,
+            target_names=['no injury', 'injury'],
+            zero_division=0
+        ))
         
         if self.model_type == 'bagging':
             print("\nPaper's Bagging Results (5x augmentation, 2875x2875):")
@@ -186,10 +205,12 @@ class DTBaggingInjuryModel:
         return {
             'accuracy': accuracy,
             'precision': precision,
-            'f1_score': f1,
+            'f1_score': f1,              # <- simple key for F1
+            'f1_score_macro': f1_macro,
+            'auc_roc': auc_roc,          # <- AUC returned here
             'confusion_matrix': cm
         }
-    
+
     def _plot_results(self, cm):
         """
         Plot confusion matrix and feature importance
