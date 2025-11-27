@@ -15,6 +15,7 @@ class XGBoostInjuryModel:
     """
     XGBoost model for athletic runner injury prediction
     Loads preprocessed data from preprocessing_xgboost folder
+    Works with V2 preprocessing scripts for timeseries (daily).csv
     """
     
     def __init__(self, data_dir='preprocessing_xgboost'):
@@ -35,7 +36,7 @@ class XGBoostInjuryModel:
         if not os.path.exists(self.data_dir):
             raise FileNotFoundError(
                 f"Directory '{self.data_dir}' not found. "
-                "Please run the preprocessing script first."
+                "Please run the XGBoost preprocessing script (V2) first."
             )
         
         # Load datasets
@@ -177,9 +178,12 @@ class XGBoostInjuryModel:
         importances = self.model.feature_importances_
         indices = np.argsort(importances)[-10:]  # Top 10 features
         
+        # Get feature names for top features
+        top_feature_names = [self.feature_names[i] for i in indices]
+        
         axes[1].barh(range(len(indices)), importances[indices])
         axes[1].set_yticks(range(len(indices)))
-        axes[1].set_yticklabels([self.feature_names[i] for i in indices])
+        axes[1].set_yticklabels(top_feature_names)
         axes[1].set_xlabel('Feature Importance')
         axes[1].set_title('Top 10 Most Important Features')
         
@@ -210,6 +214,8 @@ class XGBoostInjuryModel:
         --------
         predictions : array
             Injury predictions (0=no injury, 1=injury)
+        probabilities : array
+            Prediction probabilities
         """
         if self.model is None:
             raise ValueError("Model not trained yet!")
@@ -227,33 +233,44 @@ class XGBoostInjuryModel:
 # Main execution
 if __name__ == "__main__":
     print("=" * 60)
-    print("XGBoost Injury Prediction Model")
+    print("XGBoost Injury Prediction Model V2")
+    print("For timeseries (daily).csv dataset")
     print("Based on: Athletic Runner Injury Prediction System (2024)")
     print("=" * 60)
     
     # Initialize model
     model = XGBoostInjuryModel(data_dir='preprocessing_xgboost')
     
-    # Load preprocessed data
-    X_train, X_val, X_test, y_train, y_val, y_test = model.load_preprocessed_data()
-    
-    # Train model
-    model.train(
-        X_train, y_train, 
-        X_val, y_val,
-        n_estimators=100,
-        max_depth=6,
-        learning_rate=0.1
-    )
-    
-    # Evaluate model
-    results = model.evaluate(X_test, y_test, show_plots=True)
-    
-    # Save model
-    model.save_model()
-    
-    print("\n" + "=" * 60)
-    print("Training Complete!")
-    print("=" * 60)
-    print("\nTo make predictions on new data:")
-    print("  predictions, probs = model.predict_new_data(new_runner_data)")
+    try:
+        # Load preprocessed data
+        X_train, X_val, X_test, y_train, y_val, y_test = model.load_preprocessed_data()
+        
+        # Train model
+        model.train(
+            X_train, y_train, 
+            X_val, y_val,
+            n_estimators=100,
+            max_depth=6,
+            learning_rate=0.1
+        )
+        
+        # Evaluate model
+        results = model.evaluate(X_test, y_test, show_plots=True)
+        
+        # Save model
+        model.save_model()
+        
+        print("\n" + "=" * 60)
+        print("Training Complete!")
+        print("=" * 60)
+        print("\nModel Performance Summary:")
+        print(f"  Accuracy:  {results['accuracy']:.2%}")
+        print(f"  Precision: {results['precision']:.2%}")
+        print(f"  F1 Score:  {results['f1_score']:.2%}")
+        print("\nTo make predictions on new data:")
+        print("  predictions, probs = model.predict_new_data(new_runner_data)")
+        
+    except FileNotFoundError as e:
+        print(f"\n❌ Error: {e}")
+        print("\nPlease run the XGBoost preprocessing script (V2) first:")
+        print("  python xgboost_preprocessing_v2.py")
